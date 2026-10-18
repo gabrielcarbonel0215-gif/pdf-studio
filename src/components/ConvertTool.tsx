@@ -8,6 +8,8 @@ import {
   ImageToPdfOptions,
 } from '../lib/pdfCore';
 import { loadPdfJsDocument, renderPageToCanvas } from '../lib/pdfViewer';
+import { useToast } from './common/Toast';
+import StudioDropzone from './common/StudioDropzone';
 import {
   UploadCloud,
   Image as ImageIcon,
@@ -17,9 +19,11 @@ import {
   Layers,
   X,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function ConvertTool() {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'img2pdf' | 'pdf2img' | 'text2pdf'>('img2pdf');
 
   // Images to PDF state
@@ -46,9 +50,7 @@ export default function ConvertTool() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   // 1. Images to PDF handlers
-  const handleImageFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    const files = Array.from(e.target.files) as File[];
+  const handleImageFilesSelected = (files: File[]) => {
     setImageFiles((prev) => [...prev, ...files]);
 
     files.forEach((f) => {
@@ -58,41 +60,47 @@ export default function ConvertTool() {
       };
       reader.readAsDataURL(f);
     });
+    showToast(`Se agregaron ${files.length} imágenes`);
   };
 
   const removeImage = (index: number) => {
     setImageFiles((prev) => prev.filter((_, i) => i !== index));
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+    showToast('Imagen removida');
   };
 
   const handleConvertImagesToPdf = async () => {
-    if (imageFiles.length === 0) return;
+    if (imageFiles.length === 0) {
+      showToast('Agrega al menos una imagen para convertir.', 'info');
+      return;
+    }
     setIsProcessing(true);
     try {
       const bytes = await convertImagesToPdf(imageFiles, imgOptions);
       downloadFile(bytes, 'imagenes_convertidas.pdf');
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+      showToast('¡Imágenes convertidas a PDF con éxito!');
     } catch (err) {
       console.error('Error converting images to PDF:', err);
-      alert('Hubo un error al convertir las imágenes.');
+      showToast('Hubo un error al convertir las imágenes.', 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
   // 2. PDF to Images handlers
-  const handlePdfFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setPdfFile(file);
-      try {
-        const doc = await loadPdfJsDocument(file);
-        setPdfPageCount(doc.numPages);
-      } catch (err) {
-        console.error('Error loading PDF:', err);
-        alert('No se pudo cargar el PDF.');
-        setPdfFile(null);
-      }
+  const handlePdfSelected = async (files: File[]) => {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    setPdfFile(file);
+    try {
+      const doc = await loadPdfJsDocument(file);
+      setPdfPageCount(doc.numPages);
+      showToast(`PDF cargado con ${doc.numPages} páginas`);
+    } catch (err) {
+      console.error('Error loading PDF:', err);
+      showToast('No se pudo cargar el PDF.', 'error');
+      setPdfFile(null);
     }
   };
 
@@ -117,9 +125,10 @@ export default function ConvertTool() {
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       downloadFile(zipBlob, `${baseName}_imagenes.zip`, 'application/zip');
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+      showToast('¡Páginas exportadas en archivo ZIP!');
     } catch (err) {
       console.error('Error converting PDF to images:', err);
-      alert('Hubo un error al exportar las imágenes.');
+      showToast('Hubo un error al exportar las imágenes.', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -127,245 +136,228 @@ export default function ConvertTool() {
 
   // 3. Text to PDF handler
   const handleConvertTextToPdf = async () => {
-    if (!textContent.trim()) return;
+    if (!textContent.trim()) {
+      showToast('Escribe algo de texto antes de generar el PDF.', 'info');
+      return;
+    }
     setIsProcessing(true);
     try {
       const bytes = await convertTextToPdf(textContent, textTitle);
       downloadFile(bytes, `${textTitle || 'documento'}.pdf`);
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+      showToast('¡Documento PDF de texto generado con éxito!');
     } catch (err) {
       console.error('Error converting text to PDF:', err);
-      alert('Hubo un error al generar el PDF.');
+      showToast('Hubo un error al generar el PDF.', 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
+    <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 select-none">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold tracking-tight text-slate-800">Conversor Multiformato</h2>
-        <p className="text-sm text-slate-500">
-          Convierte imágenes a PDF con opciones de diseño, extrae páginas de PDF como imágenes en alta resolución o convierte notas de texto a PDF.
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-bold mb-2">
+          <RefreshCw size={13} className="text-teal-800" />
+          <span>Conversor de Formatos</span>
+        </div>
+        <h2 className="text-2xl font-black tracking-tight text-stone-900">
+          Conversor Universal
+        </h2>
+        <p className="text-xs text-stone-500 font-medium">
+          Convierte imágenes a PDF con márgenes personalizables, extrae páginas como imágenes en alta resolución o convierte notas de texto a documento.
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 bg-white rounded-t-2xl px-6 pt-3 shadow-2xs">
-        <button
-          onClick={() => setActiveTab('img2pdf')}
-          className={`pb-3 px-4 text-sm font-bold border-b-2 flex items-center gap-2 transition-colors ${
-            activeTab === 'img2pdf'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <ImageIcon size={16} />
-          <span>Imágenes a PDF</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('pdf2img')}
-          className={`pb-3 px-4 text-sm font-bold border-b-2 flex items-center gap-2 transition-colors ${
-            activeTab === 'pdf2img'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Layers size={16} />
-          <span>PDF a Imágenes (ZIP)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('text2pdf')}
-          className={`pb-3 px-4 text-sm font-bold border-b-2 flex items-center gap-2 transition-colors ${
-            activeTab === 'text2pdf'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <FileText size={16} />
-          <span>Texto a PDF</span>
-        </button>
+      {/* Subtab Selector */}
+      <div className="flex border-b border-[#ded7cc] bg-[#f7f5f0] rounded-t-3xl px-4 pt-3 shadow-xs space-x-2">
+        {[
+          { id: 'img2pdf', label: 'Fotos / Imágenes a PDF', icon: <ImageIcon size={15} /> },
+          { id: 'pdf2img', label: 'PDF a Imágenes (ZIP)', icon: <Archive size={15} /> },
+          { id: 'text2pdf', label: 'Texto / Notas a PDF', icon: <FileText size={15} /> },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center space-x-2 py-2.5 px-4 rounded-t-2xl font-black text-xs transition-all ${
+              activeTab === tab.id
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'text-stone-600 hover:text-stone-900 bg-[#eae4d9]/50'
+            }`}
+          >
+            <span>{tab.icon}</span>
+            <span>{tab.label}</span>
+          </button>
+        ))}
       </div>
 
-      {/* TAB 1: IMAGES TO PDF */}
+      {/* Tab 1: Images to PDF */}
       {activeTab === 'img2pdf' && (
-        <div className="bg-white border border-slate-200 rounded-b-2xl p-6 shadow-xs space-y-6">
-          {/* Upload Dropzone */}
-          <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-8 bg-slate-50/60 text-center relative group">
-            <input
-              type="file"
-              multiple
-              accept="image/png, image/jpeg, image/webp"
-              onChange={handleImageFilesChange}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            />
-            <ImageIcon size={32} className="mx-auto text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
-            <p className="text-sm font-bold text-slate-800">Selecciona o arrastra imágenes</p>
-            <p className="text-xs text-slate-400 mt-1">PNG, JPG o WebP</p>
-          </div>
-
-          {/* Options */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div className="bg-[#f7f5f0] border-x border-b border-[#ded7cc] rounded-b-3xl p-5 sm:p-7 shadow-xl space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-[11px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">
-                Tamaño de Página
+              <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">
+                Tamaño de Hoja
               </label>
               <select
                 value={imgOptions.pageSize}
-                onChange={(e) =>
-                  setImgOptions({ ...imgOptions, pageSize: e.target.value as any })
-                }
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl outline-none font-semibold"
+                onChange={(e) => setImgOptions({ ...imgOptions, pageSize: e.target.value as any })}
+                className="w-full px-3 py-2 text-xs font-bold bg-white border border-[#ded7cc] rounded-xl outline-none"
               >
-                <option value="a4">A4 Estándar</option>
+                <option value="a4">A4 (Estándar)</option>
                 <option value="letter">Carta (Letter)</option>
-                <option value="fit">Ajustar al tamaño exacto de imagen</option>
+                <option value="fit">Ajustar al tamaño de la imagen</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-[11px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">
                 Orientación
               </label>
               <select
                 value={imgOptions.orientation}
-                onChange={(e) =>
-                  setImgOptions({ ...imgOptions, orientation: e.target.value as any })
-                }
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl outline-none font-semibold"
+                onChange={(e) => setImgOptions({ ...imgOptions, orientation: e.target.value as any })}
+                className="w-full px-3 py-2 text-xs font-bold bg-white border border-[#ded7cc] rounded-xl outline-none"
               >
-                <option value="auto">Automática (según foto)</option>
+                <option value="auto">Automática (Según cada foto)</option>
                 <option value="portrait">Vertical (Retrato)</option>
-                <option value="landscape">Horizontal (Paisaje)</option>
+                <option value="landscape">Horizontal (Apaisado)</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-[11px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">
-                Márgenes
+              <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">
+                Margen ({imgOptions.margin} pt)
               </label>
-              <select
+              <input
+                type="range"
+                min={0}
+                max={50}
                 value={imgOptions.margin}
-                onChange={(e) =>
-                  setImgOptions({ ...imgOptions, margin: parseInt(e.target.value) })
-                }
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl outline-none font-semibold"
-              >
-                <option value={0}>Sin margen (Ajuste total)</option>
-                <option value={20}>Margen Pequeño (20 pt)</option>
-                <option value={40}>Margen Amplio (40 pt)</option>
-              </select>
+                onChange={(e) => setImgOptions({ ...imgOptions, margin: parseInt(e.target.value) || 0 })}
+                className="w-full accent-amber-700"
+              />
             </div>
           </div>
 
-          {/* Previews */}
+          <StudioDropzone
+            onFilesSelected={handleImageFilesSelected}
+            multiple={true}
+            accept="image/*"
+            compact={imageFiles.length > 0}
+            title="Selecciona o Arrastra tus Imágenes (JPG, PNG, WebP)"
+            subtitle="Crea un PDF combinando varias fotos ordenadas."
+            buttonText="+ Agregar Imágenes"
+            icon={<ImageIcon size={34} className="text-amber-400" />}
+          />
+
           {imagePreviews.length > 0 && (
-            <div>
-              <label className="block text-[11px] uppercase font-bold tracking-wider text-slate-400 mb-3">
-                Imágenes a Convertir ({imagePreviews.length})
-              </label>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-stone-800">
+                  {imagePreviews.length} {imagePreviews.length === 1 ? 'imagen añadida' : 'imágenes añadidas'}
+                </span>
+                <button
+                  onClick={() => {
+                    setImageFiles([]);
+                    setImagePreviews([]);
+                  }}
+                  className="text-xs text-rose-600 font-bold hover:underline"
+                >
+                  Limpiar todas
+                </button>
+              </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                 {imagePreviews.map((src, idx) => (
-                  <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-100 p-1">
-                    <img src={src} alt={`Foto ${idx + 1}`} className="w-full h-24 object-cover rounded-lg" />
+                  <div key={idx} className="relative group bg-white p-2 rounded-2xl border border-[#ded7cc] shadow-2xs">
+                    <img src={src} alt="Preview" className="w-full h-24 object-cover rounded-xl" />
                     <button
                       onClick={() => removeImage(idx)}
-                      className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                      className="absolute top-1 right-1 p-1 bg-stone-900/80 hover:bg-red-600 text-white rounded-lg transition-colors"
                     >
                       <X size={12} />
                     </button>
-                    <span className="text-[10px] font-bold text-slate-500 block text-center mt-1">
+                    <span className="text-[10px] font-black text-stone-600 block mt-1 text-center">
                       #{idx + 1}
                     </span>
                   </div>
                 ))}
               </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={handleConvertImagesToPdf}
+                  disabled={isProcessing}
+                  className="flex items-center space-x-2 bg-[#18181b] hover:bg-black text-white px-6 py-3 rounded-2xl text-xs font-black shadow-md transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isProcessing ? (
+                    <div className="w-4 h-4 border-2 border-stone-200 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Download size={15} />
+                  )}
+                  <span>Convertir Imágenes a PDF</span>
+                </button>
+              </div>
             </div>
           )}
-
-          {/* Action */}
-          <div className="flex justify-end pt-2">
-            <button
-              onClick={handleConvertImagesToPdf}
-              disabled={imageFiles.length === 0 || isProcessing}
-              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all"
-            >
-              {isProcessing ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Download size={16} />
-              )}
-              <span>Convertir a PDF</span>
-            </button>
-          </div>
         </div>
       )}
 
-      {/* TAB 2: PDF TO IMAGES */}
+      {/* Tab 2: PDF to Images */}
       {activeTab === 'pdf2img' && (
-        <div className="bg-white border border-slate-200 rounded-b-2xl p-6 shadow-xs space-y-6">
+        <div className="bg-[#f7f5f0] border-x border-b border-[#ded7cc] rounded-b-3xl p-5 sm:p-7 shadow-xl space-y-6">
           {!pdfFile ? (
-            <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-8 bg-slate-50/60 text-center relative group">
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={handlePdfFileChange}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              />
-              <Layers size={32} className="mx-auto text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
-              <p className="text-sm font-bold text-slate-800">Selecciona el archivo PDF a convertir en imágenes</p>
-              <p className="text-xs text-slate-400 mt-1">Exportación en alta fidelidad y resolución</p>
-            </div>
+            <StudioDropzone
+              onFilesSelected={handlePdfSelected}
+              accept="application/pdf"
+              title="Abre un PDF para Convertir a Imágenes"
+              subtitle="Extrae cada página en alta resolución JPG o PNG empaquetadas en un ZIP."
+              buttonText="Seleccionar Archivo PDF"
+              icon={<Archive size={34} className="text-amber-400" />}
+            />
           ) : (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-50 text-blue-600 rounded-lg border border-blue-100">
-                    <FileText size={18} />
-                  </div>
-                  <div>
-                    <span className="text-sm font-bold text-slate-800">{pdfFile.name}</span>
-                    <span className="text-xs text-slate-500 font-semibold block">{pdfPageCount} páginas</span>
-                  </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3.5 bg-[#eae4d9] rounded-2xl border border-[#ded7cc]">
+                <div>
+                  <span className="text-xs font-black text-stone-900 block truncate max-w-xs">{pdfFile.name}</span>
+                  <span className="text-[10px] text-stone-500 font-bold">{pdfPageCount} páginas detectadas</span>
                 </div>
                 <button
                   onClick={() => setPdfFile(null)}
-                  className="text-xs px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg font-semibold hover:bg-slate-100"
+                  className="px-3 py-1.5 bg-[#f7f5f0] hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold border border-[#ded7cc]"
                 >
-                  Cambiar archivo
+                  Cambiar PDF
                 </button>
               </div>
 
-              {/* Conversion Settings */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">
-                    Resolución / Calidad
-                  </label>
-                  <select
-                    value={dpiScale}
-                    onChange={(e) => setDpiScale(parseFloat(e.target.value))}
-                    className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none font-semibold"
-                  >
-                    <option value={1.5}>Estándar (~100 DPI - Rápido)</option>
-                    <option value={2.0}>Alta Definición (~150 DPI - Recomendado)</option>
-                    <option value={3.5}>Ultra Definición (~300 DPI - Impresión)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">
+                  <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">
                     Formato de Imagen
                   </label>
                   <select
                     value={imageFormat}
                     onChange={(e) => setImageFormat(e.target.value as any)}
-                    className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none font-semibold"
+                    className="w-full px-3 py-2 text-xs font-bold bg-white border border-[#ded7cc] rounded-xl outline-none"
                   >
-                    <option value="image/png">PNG (Sin pérdida de calidad)</option>
-                    <option value="image/jpeg">JPG (Fotográfico y ligero)</option>
+                    <option value="image/png">PNG (Máxima nitidez sin pérdidas)</option>
+                    <option value="image/jpeg">JPG (Fotográfico compacto)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">
+                    Resolución / Calidad
+                  </label>
+                  <select
+                    value={dpiScale}
+                    onChange={(e) => setDpiScale(parseFloat(e.target.value) || 2.0)}
+                    className="w-full px-3 py-2 text-xs font-bold bg-white border border-[#ded7cc] rounded-xl outline-none"
+                  >
+                    <option value={1.5}>Estándar (~110 DPI - Rápido)</option>
+                    <option value={2.0}>Alta (~150 DPI - Recomendado)</option>
+                    <option value={3.0}>Ultra Alta (~225 DPI - Para Impresión)</option>
                   </select>
                 </div>
               </div>
@@ -374,14 +366,14 @@ export default function ConvertTool() {
                 <button
                   onClick={handleConvertPdfToImages}
                   disabled={isProcessing}
-                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all"
+                  className="flex items-center space-x-2 bg-[#18181b] hover:bg-black text-white px-6 py-3 rounded-2xl text-xs font-black shadow-md transition-all active:scale-95 disabled:opacity-50"
                 >
                   {isProcessing ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-stone-200 border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <Archive size={16} />
+                    <Download size={15} />
                   )}
-                  <span>Exportar Páginas a ZIP ({imageFormat === 'image/png' ? 'PNG' : 'JPG'})</span>
+                  <span>Exportar Páginas a ZIP</span>
                 </button>
               </div>
             </div>
@@ -389,46 +381,47 @@ export default function ConvertTool() {
         </div>
       )}
 
-      {/* TAB 3: TEXT TO PDF */}
+      {/* Tab 3: Text to PDF */}
       {activeTab === 'text2pdf' && (
-        <div className="bg-white border border-slate-200 rounded-b-2xl p-6 shadow-xs space-y-4">
+        <div className="bg-[#f7f5f0] border-x border-b border-[#ded7cc] rounded-b-3xl p-5 sm:p-7 shadow-xl space-y-4">
           <div>
-            <label className="block text-[11px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">
+            <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">
               Título del Documento
             </label>
             <input
               type="text"
               value={textTitle}
               onChange={(e) => setTextTitle(e.target.value)}
-              placeholder="Ej: Contrato de Arrendamiento, Minuta..."
-              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3.5 py-2.5 text-xs font-bold bg-white border border-[#ded7cc] rounded-xl outline-none focus:border-stone-800"
+              placeholder="Ej: Contrato de Arrendamiento / Notas de Clase"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">
+            <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">
               Cuerpo del Documento
             </label>
             <textarea
+              rows={10}
               value={textContent}
               onChange={(e) => setTextContent(e.target.value)}
-              rows={12}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 font-sans leading-relaxed outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-3.5 text-xs font-medium bg-white border border-[#ded7cc] rounded-2xl outline-none focus:border-stone-800 font-mono shadow-inner"
+              placeholder="Escribe o pega aquí el texto completo..."
             />
           </div>
 
           <div className="flex justify-end pt-2">
             <button
               onClick={handleConvertTextToPdf}
-              disabled={!textContent.trim() || isProcessing}
-              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all"
+              disabled={isProcessing}
+              className="flex items-center space-x-2 bg-[#18181b] hover:bg-black text-white px-6 py-3 rounded-2xl text-xs font-black shadow-md transition-all active:scale-95 disabled:opacity-50"
             >
               {isProcessing ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-stone-200 border-t-transparent rounded-full animate-spin" />
               ) : (
-                <Download size={16} />
+                <Download size={15} />
               )}
-              <span>Crear y Descargar PDF</span>
+              <span>Generar Documento PDF</span>
             </button>
           </div>
         </div>

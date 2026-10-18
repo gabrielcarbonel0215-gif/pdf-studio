@@ -27,6 +27,7 @@ import StampDialog from './StampDialog';
 import WatermarkDialog from './WatermarkDialog';
 import PageNumberDialog from './PageNumberDialog';
 import MobileStudio from '../mobile/MobileStudio';
+import StudioDropzone from '../common/StudioDropzone';
 import {
   UploadCloud,
   ChevronLeft,
@@ -243,7 +244,7 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
       showToast('Documento cargado');
     } catch (err) {
       console.error('Error loading PDF:', err);
-      alert('No se pudo cargar el PDF.');
+      showToast('No se pudo cargar el PDF.', 'error');
       setFile(null);
     } finally {
       setIsLoadingDoc(false);
@@ -513,7 +514,7 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
       showToast('¡PDF descargado con éxito!');
     } catch (err) {
       console.error('Error exporting edited PDF:', err);
-      alert('Hubo un error al generar el PDF.');
+      showToast('Hubo un error al generar el PDF.', 'error');
     } finally {
       setIsExporting(false);
     }
@@ -557,28 +558,15 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
       )}
 
       {!file ? (
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="glass-panel rounded-3xl p-8 md:p-12 text-center max-w-lg w-full relative group border border-stone-300/80 hover:border-indigo-500/50 hover:shadow-2xl transition-all duration-300">
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={handleFileChange}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-            />
-            <div className="w-18 h-18 bg-[#0f172a] text-white rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-xl group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
-              <UploadCloud size={34} className="text-amber-400" />
-            </div>
-            <h3 className="text-2xl font-black text-[#0f172a] mb-1">
-              Abre un PDF en el Editor
-            </h3>
-            <p className="text-xs text-stone-500 max-w-xs mx-auto mb-6 leading-relaxed font-medium">
-              Haz clic sobre cualquier texto para editarlo con su misma tipografía, añade firmas, sellos o formas.
-            </p>
-            <div className="inline-flex items-center gap-2 bg-[#0f172a] hover:bg-stone-800 text-white px-7 py-3.5 rounded-full text-xs font-black shadow-lg group-hover:shadow-indigo-500/20 transition-all">
-              <span>Seleccionar Archivo PDF</span>
-            </div>
-          </div>
-        </div>
+        <StudioDropzone
+          onFilesSelected={(files) => {
+            if (files && files[0]) loadDocumentFile(files[0]);
+          }}
+          title="Abre un PDF en el Editor Visual"
+          subtitle="Haz clic sobre cualquier texto para editarlo con su misma tipografía, añade firmas, sellos o formas."
+          buttonText="Seleccionar Archivo PDF"
+          icon={<Sparkles size={34} className="text-amber-400" />}
+        />
       ) : (
         <div className="flex-1 flex flex-col h-full overflow-hidden">
           {/* Top Document Header Bar (Fixed above canvas - Never covers the PDF) */}

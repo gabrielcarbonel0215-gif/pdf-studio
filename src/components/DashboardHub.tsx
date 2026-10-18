@@ -95,6 +95,16 @@ export default function DashboardHub({ onSelectTool }: DashboardHubProps) {
       description: 'Convierte fotos JPG/PNG a PDF con tamaño de hoja o exporta páginas de PDF a imágenes en ZIP.',
       features: ['Fotos a PDF (A4/Carta)', 'PDF a imágenes en ZIP', 'Notas a documento PDF'],
     },
+    {
+      id: 'security',
+      title: 'Seguridad & Meta',
+      subtitle: 'Comprimir, Aplanar y Proteger',
+      icon: <Shield size={34} className="text-stone-800" />,
+      color: 'bg-stone-200/70 border-stone-300',
+      tilt: '-rotate-0.5 hover:rotate-0',
+      description: 'Optimiza el tamaño de tu archivo, aplana formularios interactivos y edita títulos o autor.',
+      features: ['Compresión inteligente sin pérdidas', 'Aplanar formularios a inmutable', 'Editar metadatos y créditos'],
+    },
   ];
 
   return (

@@ -3,6 +3,7 @@ import confetti from 'canvas-confetti';
 import { loadPdfJsDocument, extractAllTextFromPdf, renderPageToCanvas } from '../lib/pdfViewer';
 import { performOcr, OcrProgress } from '../lib/ocrEngine';
 import { downloadFile, convertTextToPdf } from '../lib/pdfCore';
+import { useToast } from './common/Toast';
 import {
   UploadCloud,
   File as FileIcon,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react';
 
 export default function OCRTool() {
+  const { showToast } = useToast();
   const [loadedFile, setLoadedFile] = useState<File | null>(null);
   const [fileType, setFileType] = useState<'pdf' | 'image' | null>(null);
 
@@ -91,7 +93,7 @@ export default function OCRTool() {
       setOcrPage(1);
     } catch (err) {
       console.error('Error extracting text from PDF:', err);
-      alert('No se pudo procesar el PDF.');
+      showToast('No se pudo procesar el PDF.', 'error');
       resetAll();
     } finally {
       setIsLoadingDoc(false);
@@ -107,7 +109,7 @@ export default function OCRTool() {
     } else if (file.type.startsWith('image/')) {
       processImageFile(file);
     } else {
-      alert('Por favor selecciona un archivo PDF o una imagen (PNG, JPG, WebP).');
+      showToast('Por favor selecciona un archivo PDF o una imagen (PNG, JPG, WebP).', 'info');
     }
   };
 
@@ -159,9 +161,10 @@ export default function OCRTool() {
 
       setOcrResultText(result.text || 'No se detectó texto legible en la imagen.');
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
+      showToast('¡Texto extraído con éxito!');
     } catch (err) {
       console.error('Image OCR Error:', err);
-      alert('Hubo un error al extraer el texto de la imagen.');
+      showToast('Hubo un error al extraer el texto de la imagen.', 'error');
     } finally {
       setIsProcessingOcr(false);
       setOcrProgress(null);
@@ -183,9 +186,10 @@ export default function OCRTool() {
 
       setOcrResultText(result.text || 'No se detectó texto en esta página.');
       confetti({ particleCount: 60, spread: 50, origin: { y: 0.7 } });
+      showToast('¡Texto extraído de la página!');
     } catch (err) {
       console.error('OCR Error:', err);
-      alert('Hubo un error al ejecutar el OCR sobre el PDF.');
+      showToast('Hubo un error al ejecutar el OCR sobre el PDF.', 'error');
     } finally {
       setIsProcessingOcr(false);
       setOcrProgress(null);

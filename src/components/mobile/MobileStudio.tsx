@@ -13,6 +13,7 @@ import {
   extractPageTextItems,
 } from '../../lib/pdfViewer';
 import { applyStudioEditsToPdf, downloadFile } from '../../lib/pdfCore';
+import { useToast } from '../common/Toast';
 import {
   X,
   Edit3,
@@ -32,6 +33,8 @@ import {
   Eraser,
   Share2,
   Send,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 
 interface MobileStudioProps {
@@ -47,6 +50,8 @@ export default function MobileStudio({
   numPages,
   onClose,
 }: MobileStudioProps) {
+  const { showToast } = useToast();
+
   // Current Page Index (0-based)
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
 
@@ -70,6 +75,37 @@ export default function MobileStudio({
   const [thumbnails, setThumbnails] = useState<PageThumbnail[]>([]);
   const [detectedTextItems, setDetectedTextItems] = useState<DetectedFontInfo[]>([]);
   const [annotationsByPage, setAnnotationsByPage] = useState<Record<number, AnnotationElement[]>>({});
+
+  // Undo / Redo History Stack
+  const [history, setHistory] = useState<Record<number, AnnotationElement[]>[]>([{}]);
+  const [historyIndex, setHistoryIndex] = useState<number>(0);
+
+  const pushHistory = (newAnnotations: Record<number, AnnotationElement[]>) => {
+    setHistory((prev) => {
+      const updated = prev.slice(0, historyIndex + 1);
+      return [...updated, newAnnotations];
+    });
+    setHistoryIndex((prev) => prev + 1);
+    setAnnotationsByPage(newAnnotations);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const prevIndex = historyIndex - 1;
+      setHistoryIndex(prevIndex);
+      setAnnotationsByPage(history[prevIndex]);
+      showToast('Deshecho');
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const nextIndex = historyIndex + 1;
+      setHistoryIndex(nextIndex);
+      setAnnotationsByPage(history[nextIndex]);
+      showToast('Rehecho');
+    }
+  };
 
   // Synchronized Page Dimensions in Points
   const [pageDimensions, setPageDimensions] = useState<{
@@ -306,21 +342,25 @@ export default function MobileStudio({
       ? current.map((el) => (el.id === element.id ? element : el))
       : [...current, element];
 
-    setAnnotationsByPage((prev) => ({
-      ...prev,
+    const nextState = {
+      ...annotationsByPage,
       [currentPageIndex]: updated,
-    }));
+    };
+    pushHistory(nextState);
+    showToast('Cambios guardados en la página');
   };
 
   // Delete Annotation
   const deleteAnnotation = (id: string) => {
     const current = annotationsByPage[currentPageIndex] || [];
-    setAnnotationsByPage((prev) => ({
-      ...prev,
+    const nextState = {
+      ...annotationsByPage,
       [currentPageIndex]: current.filter((el) => el.id !== id),
-    }));
+    };
+    pushHistory(nextState);
     setActiveDrawer('none');
     setEditingElement(null);
+    showToast('Elemento eliminado');
   };
 
   // Apply Changes from Bottom Editor Sheet
@@ -352,9 +392,10 @@ export default function MobileStudio({
       const baseName = file.name.replace(/\.[^/.]+$/, '');
       downloadFile(newPdfBytes, `${baseName}_editado.pdf`);
       confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+      showToast('¡PDF descargado con éxito!');
     } catch (err) {
       console.error('Error exporting PDF:', err);
-      alert('Error al descargar el PDF.');
+      showToast('Error al descargar el PDF.', 'error');
     } finally {
       setIsExporting(false);
     }
@@ -382,16 +423,17 @@ export default function MobileStudio({
           text: 'Documento PDF editado con PDF Studio Pro',
         });
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
+        showToast('Enlace de compartir abierto');
       } else {
         // Fallback: Download file
         downloadFile(newPdfBytes, fileName);
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
-        alert('Archivo listo. Se ha descargado a tu teléfono para que puedas adjuntarlo en WhatsApp.');
+        showToast('Archivo descargado para adjuntar en WhatsApp');
       }
     } catch (err: any) {
       if (err && err.name !== 'AbortError') {
         console.error('Error sharing PDF:', err);
-        alert('No se pudo compartir el archivo.');
+        showToast('No se pudo compartir el archivo.', 'error');
       }
     } finally {
       setIsExporting(false);
@@ -553,8 +595,29 @@ export default function MobileStudio({
         </div>
       </header>
 
-      {/* 2. SUB-HEADER: CENTERED CRISP ZOOM CONTROLS */}
-      <div className="bg-[#e4e1db]/80 px-3 py-1.5 flex items-center justify-center border-b border-[#d8d4ce] shrink-0">
+      {/* 2. SUB-HEADER: CRISP ZOOM & UNDO/REDO CONTROLS */}
+      <div className="bg-[#e4e1db]/80 px-3 py-1.5 flex items-center justify-between border-b border-[#d8d4ce] shrink-0">
+        {/* Left: Undo / Redo */}
+        <div className="flex items-center space-x-1">
+          <button
+            onClick={handleUndo}
+            disabled={historyIndex <= 0}
+            className="p-1.5 bg-[#f9f8f6] hover:bg-stone-200 disabled:opacity-30 text-stone-800 rounded-xl border border-[#ded7cc] transition-all active:scale-95"
+            title="Deshacer"
+          >
+            <Undo2 size={13} />
+          </button>
+          <button
+            onClick={handleRedo}
+            disabled={historyIndex >= history.length - 1}
+            className="p-1.5 bg-[#f9f8f6] hover:bg-stone-200 disabled:opacity-30 text-stone-800 rounded-xl border border-[#ded7cc] transition-all active:scale-95"
+            title="Rehacer"
+          >
+            <Redo2 size={13} />
+          </button>
+        </div>
+
+        {/* Center: Zoom Controls */}
         <div className="flex items-center space-x-1.5 bg-[#f9f8f6] px-3 py-1 rounded-xl border border-[#e2e0db] shadow-2xs">
           <button
             onClick={() => setZoomLevel((z) => Math.max(0.7, Math.round((z - 0.2) * 10) / 10))}
@@ -581,6 +644,11 @@ export default function MobileStudio({
               Ajustar
             </button>
           )}
+        </div>
+
+        {/* Right: Page indicator */}
+        <div className="text-[10px] font-black text-stone-700 px-2 py-1 bg-[#f9f8f6] rounded-xl border border-[#ded7cc]">
+          {currentPageIndex + 1}/{numPages}
         </div>
       </div>
 

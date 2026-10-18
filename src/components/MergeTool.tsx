@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { mergePdfs, downloadFile } from '../lib/pdfCore';
 import { loadPdfJsDocument, generateThumbnails } from '../lib/pdfViewer';
+import { useToast } from './common/Toast';
+import StudioDropzone from './common/StudioDropzone';
 import {
   UploadCloud,
   File as FileIcon,
@@ -13,6 +15,7 @@ import {
   GripVertical,
   Plus,
   SlidersHorizontal,
+  FilePlus2,
 } from 'lucide-react';
 
 interface PdfFileItem {
@@ -24,10 +27,10 @@ interface PdfFileItem {
 }
 
 export default function MergeTool() {
+  const { showToast } = useToast();
   const [items, setItems] = useState<PdfFileItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -35,10 +38,9 @@ export default function MergeTool() {
     };
   }, [previewUrl]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+  const handleFilesSelected = async (newFiles: File[]) => {
+    if (!newFiles || newFiles.length === 0) return;
     setIsProcessing(true);
-    const newFiles = Array.from(e.target.files) as File[];
     const newItems: PdfFileItem[] = [];
 
     for (const f of newFiles) {
@@ -61,16 +63,18 @@ export default function MergeTool() {
         });
       } catch (err) {
         console.error('Error loading PDF for merge:', err);
-        alert(`El archivo ${f.name} no parece ser un PDF válido.`);
+        showToast(`El archivo ${f.name} no parece ser un PDF válido.`, 'error');
       }
     }
 
     setItems((prev) => [...prev, ...newItems]);
     setIsProcessing(false);
+    showToast(`Se agregaron ${newItems.length} archivos a la lista`);
   };
 
   const removeFile = (index: number) => {
     setItems((prev) => prev.filter((_, i) => i !== index));
+    showToast('Archivo removido');
   };
 
   const moveFile = (index: number, direction: 'up' | 'down') => {
@@ -84,7 +88,10 @@ export default function MergeTool() {
   };
 
   const handleMerge = async () => {
-    if (items.length < 2) return;
+    if (items.length < 2) {
+      showToast('Por favor agrega al menos 2 archivos para unir.', 'info');
+      return;
+    }
     setIsProcessing(true);
     try {
       const mergedBytes = await mergePdfs(
@@ -92,16 +99,20 @@ export default function MergeTool() {
       );
       downloadFile(mergedBytes, 'documentos_unidos.pdf');
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+      showToast('¡Documentos unidos y descargados con éxito!');
     } catch (err) {
       console.error('Error merging PDFs:', err);
-      alert('Hubo un error al unir los archivos.');
+      showToast('Hubo un error al unir los archivos.', 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handlePreview = async () => {
-    if (items.length < 2) return;
+    if (items.length < 2) {
+      showToast('Por favor agrega al menos 2 archivos para previsualizar.', 'info');
+      return;
+    }
     setIsProcessing(true);
     try {
       const mergedBytes = await mergePdfs(
@@ -110,9 +121,10 @@ export default function MergeTool() {
       const blob = new Blob([mergedBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
+      showToast('Vista previa generada');
     } catch (err) {
-      console.error('Error creating preview:', err);
-      alert('No se pudo generar la vista previa.');
+      console.error('Error generating preview:', err);
+      showToast('Error al generar la vista previa.', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -121,77 +133,97 @@ export default function MergeTool() {
   const totalPages = items.reduce((acc, it) => acc + it.pageCount, 0);
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold tracking-tight text-slate-800">Unir PDFs</h2>
-        <p className="text-sm text-slate-500">
-          Combina múltiples documentos PDF en un solo archivo con reordenación y rangos de páginas por archivo.
-        </p>
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 select-none">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-bold mb-2">
+            <FilePlus2 size={13} className="text-blue-800" />
+            <span>Unión de Documentos</span>
+          </div>
+          <h2 className="text-2xl font-black tracking-tight text-stone-900">
+            Unir Múltiples PDFs
+          </h2>
+          <p className="text-xs text-stone-500 font-medium">
+            Combina varios archivos en el orden exacto que necesites con rangos opcionales de páginas.
+          </p>
+        </div>
+
+        {items.length > 0 && (
+          <button
+            onClick={() => setItems([])}
+            className="self-start sm:self-center px-3.5 py-1.5 bg-[#eae4d9] hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 border border-[#ded7cc]"
+          >
+            <X size={14} />
+            <span>Limpiar Todo</span>
+          </button>
+        )}
       </div>
 
       {/* Upload Zone */}
-      <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-3xl p-8 mb-6 bg-white text-center transition-all relative group shadow-xs">
-        <input
-          type="file"
-          multiple
-          accept="application/pdf"
-          onChange={handleFileChange}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+      {items.length === 0 ? (
+        <StudioDropzone
+          onFilesSelected={handleFilesSelected}
+          multiple={true}
+          title="Selecciona o Arrastra los PDFs a Unir"
+          subtitle="Puedes agregar múltiples documentos a la vez."
+          buttonText="Seleccionar Archivos PDF"
+          icon={<FilePlus2 size={34} className="text-amber-400" />}
         />
-        <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-105 transition-transform">
-          <UploadCloud size={28} />
-        </div>
-        <p className="text-sm font-bold text-slate-800">Haz clic o arrastra aquí varios archivos PDF</p>
-        <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider font-semibold">
-          Puedes agregar tantos archivos como necesites
-        </p>
-      </div>
+      ) : (
+        <div className="space-y-4">
+          <StudioDropzone
+            onFilesSelected={handleFilesSelected}
+            multiple={true}
+            compact={true}
+            buttonText="+ Añadir más PDFs a la lista"
+          />
 
-      {/* Items List */}
-      {items.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-6">
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-              Archivos en orden de unión ({items.length})
-            </span>
-            <span className="text-xs font-bold bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
-              {totalPages} páginas en total
-            </span>
-          </div>
+          {/* Items List */}
+          <div className="bg-[#f7f5f0] border border-[#ded7cc] rounded-3xl shadow-xl overflow-hidden">
+            <div className="p-4 bg-[#eae4d9] border-b border-[#ded7cc] flex justify-between items-center">
+              <span className="text-xs font-black text-stone-800 uppercase tracking-wider">
+                Archivos en orden de unión ({items.length})
+              </span>
+              <span className="text-xs font-black bg-blue-100 text-blue-950 px-3 py-1 rounded-full border border-blue-200">
+                {totalPages} páginas en total
+              </span>
+            </div>
 
-          <ul className="divide-y divide-slate-100">
-            {items.map((item, index) => (
-              <li
-                key={item.id}
-                className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center space-x-3 overflow-hidden flex-1">
-                  <div className="text-slate-400 cursor-grab">
-                    <GripVertical size={18} />
-                  </div>
+            <ul className="divide-y divide-[#ded7cc]">
+              {items.map((item, index) => (
+                <li
+                  key={item.id}
+                  className="p-3.5 flex items-center justify-between gap-3 hover:bg-[#efece6] transition-colors"
+                >
+                  <div className="flex items-center space-x-3 overflow-hidden flex-1">
+                    <span className="text-xs font-black text-stone-400 w-5 text-center">
+                      #{index + 1}
+                    </span>
 
-                  {item.thumbnailUrl ? (
-                    <img
-                      src={item.thumbnailUrl}
-                      alt="Miniatura"
-                      className="w-10 h-13 object-cover rounded-lg border border-slate-200 shadow-2xs"
-                    />
-                  ) : (
-                    <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
-                      <FileIcon size={20} />
-                    </div>
-                  )}
+                    {item.thumbnailUrl ? (
+                      <img
+                        src={item.thumbnailUrl}
+                        alt="Miniatura"
+                        className="w-10 h-13 object-cover rounded-xl border border-[#ded7cc] shadow-2xs shrink-0"
+                      />
+                    ) : (
+                      <div className="p-2.5 bg-[#eae4d9] text-blue-800 rounded-xl border border-[#ded7cc] shrink-0">
+                        <FileIcon size={18} />
+                      </div>
+                    )}
 
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-sm font-bold text-slate-800 truncate">{item.file.name}</span>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs font-semibold text-slate-500">
-                        {item.pageCount} páginas
+                    <div className="truncate flex-1">
+                      <span className="text-xs font-black text-stone-900 block truncate">
+                        {item.file.name}
                       </span>
-                      <div className="flex items-center gap-1.5">
-                        <SlidersHorizontal size={13} className="text-slate-400" />
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-stone-500 font-bold">
+                          {item.pageCount} {item.pageCount === 1 ? 'pág' : 'págs'}
+                        </span>
+                        <span className="text-stone-300">•</span>
                         <input
                           type="text"
+                          placeholder="Todas (o ej: 1-3, 5)"
                           value={item.pageRanges}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -199,86 +231,90 @@ export default function MergeTool() {
                               prev.map((it, idx) => (idx === index ? { ...it, pageRanges: val } : it))
                             );
                           }}
-                          placeholder="Todas las páginas (ej. 1-3, 5)"
-                          className="text-xs px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md outline-none w-48 focus:border-blue-500 focus:bg-white"
+                          className="text-[10px] bg-white border border-[#ded7cc] rounded-lg px-2 py-0.5 w-32 outline-none font-bold text-stone-800"
+                          title="Filtro de páginas a incluir"
                         />
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center space-x-1">
-                  <button
-                    onClick={() => moveFile(index, 'up')}
-                    disabled={index === 0}
-                    title="Mover arriba"
-                    className="p-2 text-slate-400 hover:text-slate-700 disabled:opacity-20 rounded-lg hover:bg-slate-100"
-                  >
-                    <MoveUp size={16} />
-                  </button>
-                  <button
-                    onClick={() => moveFile(index, 'down')}
-                    disabled={index === items.length - 1}
-                    title="Mover abajo"
-                    className="p-2 text-slate-400 hover:text-slate-700 disabled:opacity-20 rounded-lg hover:bg-slate-100"
-                  >
-                    <MoveDown size={16} />
-                  </button>
-                  <button
-                    onClick={() => removeFile(index)}
-                    title="Quitar"
-                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg ml-1"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+                  <div className="flex items-center space-x-1 shrink-0">
+                    <button
+                      onClick={() => moveFile(index, 'up')}
+                      disabled={index === 0}
+                      className="p-1.5 text-stone-600 hover:text-black hover:bg-stone-200 disabled:opacity-20 rounded-lg transition-colors"
+                      title="Mover arriba"
+                    >
+                      <MoveUp size={15} />
+                    </button>
+                    <button
+                      onClick={() => moveFile(index, 'down')}
+                      disabled={index === items.length - 1}
+                      className="p-1.5 text-stone-600 hover:text-black hover:bg-stone-200 disabled:opacity-20 rounded-lg transition-colors"
+                      title="Mover abajo"
+                    >
+                      <MoveDown size={15} />
+                    </button>
+                    <button
+                      onClick={() => removeFile(index)}
+                      className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-100/60 rounded-lg transition-colors"
+                      title="Eliminar de la lista"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/* Bottom Actions */}
+            <div className="p-4 bg-[#eae4d9] border-t border-[#ded7cc] flex flex-col sm:flex-row items-center justify-between gap-3">
+              <span className="text-xs font-bold text-stone-600">
+                Arrastra o usa las flechas para ordenar antes de unir.
+              </span>
+
+              <div className="flex items-center space-x-2.5 w-full sm:w-auto justify-end">
+                <button
+                  onClick={handlePreview}
+                  disabled={isProcessing || items.length < 2}
+                  className="flex items-center space-x-1.5 px-4 py-2.5 bg-white hover:bg-stone-100 text-stone-800 rounded-2xl text-xs font-black border border-[#ded7cc] shadow-xs transition-all active:scale-95 disabled:opacity-50"
+                >
+                  <Eye size={14} />
+                  <span>Previsualizar</span>
+                </button>
+
+                <button
+                  onClick={handleMerge}
+                  disabled={isProcessing || items.length < 2}
+                  className="flex items-center space-x-2 bg-[#18181b] hover:bg-black text-white px-6 py-2.5 rounded-2xl text-xs font-black shadow-md transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isProcessing ? (
+                    <div className="w-4 h-4 border-2 border-stone-200 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                  <span>Unir PDFs y Descargar</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Action Buttons */}
-      <div className="flex justify-end items-center gap-3">
-        {items.length >= 2 && (
-          <button
-            onClick={handlePreview}
-            disabled={isProcessing}
-            className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-bold shadow-xs transition-colors"
-          >
-            <Eye size={17} />
-            <span>Vista Previa</span>
-          </button>
-        )}
-
-        <button
-          onClick={handleMerge}
-          disabled={items.length < 2 || isProcessing}
-          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm disabled:opacity-50 transition-all hover:shadow-md"
-        >
-          {isProcessing ? (
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Download size={17} />
-          )}
-          <span>Unir y Descargar PDF</span>
-        </button>
-      </div>
-
-      {/* Live Preview Modal */}
+      {/* Preview Modal */}
       {previewUrl && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex flex-col p-6">
-          <div className="flex justify-between items-center mb-3 bg-white p-3.5 rounded-2xl shadow-lg">
-            <h3 className="font-bold text-slate-800 text-sm">Vista Previa: Documento Fusionado</h3>
-            <button
-              onClick={() => setPreviewUrl(null)}
-              className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100"
-            >
-              <X size={20} />
-            </button>
-          </div>
-          <div className="flex-1 bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-            <iframe src={previewUrl} className="w-full h-full border-none" title="PDF Preview" />
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#f7f5f0] rounded-3xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-[#ded7cc]">
+            <div className="p-4 border-b border-[#ded7cc] flex justify-between items-center bg-[#eae4d9]">
+              <span className="text-sm font-black text-stone-900">Vista Previa de Documentos Unidos</span>
+              <button
+                onClick={() => setPreviewUrl(null)}
+                className="p-1.5 text-stone-600 hover:text-black rounded-xl hover:bg-stone-300"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <iframe src={previewUrl} className="flex-1 w-full h-full border-none" title="Vista previa" />
           </div>
         </div>
       )}

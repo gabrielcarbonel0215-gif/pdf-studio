@@ -546,7 +546,35 @@ export async function flattenPdf(file: File): Promise<Uint8Array> {
   } catch (e) {
     // PDF might not have interactive form fields
   }
-  return await pdfDoc.save();
+  return await pdfDoc.save({ useObjectStreams: true });
+}
+
+/**
+ * Optimizes a PDF by stripping redundant metadata, compressing object streams,
+ * and rebuilding cross-reference tables without rasterizing or destroying vector text.
+ */
+export async function optimizePdf(
+  file: File,
+  stripMetadata: boolean = false
+): Promise<Uint8Array> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+
+  if (stripMetadata) {
+    pdfDoc.setTitle('');
+    pdfDoc.setAuthor('');
+    pdfDoc.setSubject('');
+    pdfDoc.setKeywords([]);
+    pdfDoc.setProducer('PDF Studio Pro');
+    pdfDoc.setCreator('PDF Studio Pro');
+  }
+
+  // Save with optimized object streams and compressed tables
+  return await pdfDoc.save({
+    useObjectStreams: true,
+    addDefaultPage: false,
+    objectsPerTick: 50,
+  });
 }
 
 /**
