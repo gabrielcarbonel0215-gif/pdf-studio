@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "PDF Studio",
+  "version": "1.0",
+  "description": "Una herramienta rápida para unir, dividir, eliminar páginas y añadir texto a tus archivos PDF, 100% local.",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Abrir PDF Studio"
+  },
+  "permissions": []
+}

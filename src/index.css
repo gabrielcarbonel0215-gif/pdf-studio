@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply antialiased text-stone-800 bg-[#ede8df] font-sans selection:bg-amber-300 selection:text-stone-900;
+  }
+}
+
+/* Soft Matte Warm Studio Desk Background (Gentle on the eyes, no glare) */
+.bg-studio-desk {
+  background-color: #ece7de;
+  background-image: radial-gradient(#d4cdc0 1.2px, transparent 1.2px);
+  background-size: 22px 22px;
+}
+
+/* Soft Matte Polaroid Card Frame (Warm gray-paper tone, non-glaring) */
+.polaroid-card {
+  background-color: #f7f5f0;
+  padding: 14px 14px 28px 14px;
+  box-shadow: 
+    0 2px 5px rgba(100, 90, 80, 0.05),
+    0 10px 25px -4px rgba(100, 90, 80, 0.09),
+    0 1px 2px rgba(100, 90, 80, 0.04);
+  border: 1px solid #ded7cc;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.polaroid-card:hover {
+  transform: translateY(-5px) scale(1.015);
+  box-shadow: 
+    0 16px 30px -6px rgba(100, 90, 80, 0.14),
+    0 6px 12px -2px rgba(100, 90, 80, 0.08);
+}
+
+/* Subtle Pastel Washi Tape Accent */
+.polaroid-tape {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 65px;
+  height: 20px;
+  background-color: rgba(254, 240, 138, 0.55);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  backdrop-filter: blur(2px);
+  z-index: 10;
+}
+
+/* Soft Pastel Glass Panels */
+.pastel-panel {
+  background: rgba(246, 243, 237, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(218, 210, 198, 0.8);
+}
+
+/* Gentle Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1c8b8;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b8ad9b;
+}
