@@ -240,8 +240,9 @@ export default function MobileStudio({
 
     setOriginalTextReference(item.text);
     setDetectedFontName(item.originalFontName || item.matchedFamily);
+    saveAnnotation(newElement);
     setEditingElement(newElement);
-    setActiveDrawer('edit_text');
+    showToast('Edita directamente el texto en el documento');
   };
 
   // Touch / Click handler on the document card (Proximity Detection)
@@ -330,8 +331,9 @@ export default function MobileStudio({
     };
     setOriginalTextReference('');
     setDetectedFontName('Helvetica');
+    saveAnnotation(newElement);
     setEditingElement(newElement);
-    setActiveDrawer('edit_text');
+    showToast('Toca para editar el texto en el documento');
   };
 
   // Save / Update Annotation
@@ -442,17 +444,17 @@ export default function MobileStudio({
 
   // Android / Mobile Browser Back Button Interceptor
   useEffect(() => {
-    if (activeDrawer !== 'none' || showMobileTextEditor) {
+    if (activeDrawer !== 'none' || editingElement) {
       if (typeof window !== 'undefined') {
         window.history.pushState({ mobileDrawerOpen: true }, '');
       }
     }
-  }, [activeDrawer, showMobileTextEditor]);
+  }, [activeDrawer, editingElement]);
 
   useEffect(() => {
     const handleAndroidBack = (e: PopStateEvent) => {
-      if (showMobileTextEditor) {
-        setShowMobileTextEditor(false);
+      if (editingElement) {
+        setEditingElement(null);
       } else if (activeDrawer !== 'none') {
         setActiveDrawer('none');
       } else {
@@ -468,7 +470,7 @@ export default function MobileStudio({
         window.removeEventListener('popstate', handleAndroidBack);
       }
     };
-  }, [activeDrawer, showMobileTextEditor, onClose]);
+  }, [activeDrawer, editingElement, onClose]);
 
   // Multi-Touch Pinch-to-Zoom & Swipe Handling
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -715,6 +717,7 @@ export default function MobileStudio({
 
               if (el.type === 'text') {
                 const textEl = el as TextElement;
+                const isSelected = editingElement?.id === el.id;
                 return (
                   <div
                     key={el.id}
@@ -722,9 +725,12 @@ export default function MobileStudio({
                       e.stopPropagation();
                       setOriginalTextReference('');
                       setEditingElement(textEl);
-                      setActiveDrawer('edit_text');
                     }}
-                    className="absolute cursor-pointer flex items-center px-0.5 select-none"
+                    className={`absolute cursor-pointer flex items-center px-0.5 select-none transition-shadow ${
+                      isSelected
+                        ? 'ring-1.5 ring-amber-500 rounded-xs shadow-xs z-30'
+                        : ''
+                    }`}
                     style={{
                       left: `${screenX}px`,
                       top: `${screenY}px`,
@@ -733,25 +739,61 @@ export default function MobileStudio({
                       backgroundColor: textEl.backgroundColor || '#ffffff',
                     }}
                   >
-                    <span
-                      className="whitespace-nowrap overflow-visible select-none"
-                      style={{
-                        fontFamily:
-                          textEl.fontFamily === 'Times-Roman'
-                            ? 'Times New Roman, Georgia, serif'
-                            : textEl.fontFamily === 'Courier'
-                            ? 'Courier New, monospace'
-                            : 'Arial, Helvetica, sans-serif',
-                        fontSize: `${textEl.fontSize * totalScale}px`,
-                        fontWeight: textEl.fontWeight,
-                        fontStyle: textEl.fontStyle,
-                        textDecoration: textEl.underline ? 'underline' : 'none',
-                        color: textEl.color || '#000000',
-                        lineHeight: 1.15,
-                      }}
-                    >
-                      {textEl.text}
-                    </span>
+                    {isSelected ? (
+                      <textarea
+                        autoFocus
+                        value={editingElement.text}
+                        onChange={(e) => {
+                          const newText = e.target.value;
+                          const lineCount = (newText.match(/\n/g) || []).length + 1;
+                          const minHeight = Math.max(20, Math.round(lineCount * editingElement.fontSize * 1.35));
+                          const updated = {
+                            ...editingElement,
+                            text: newText,
+                            height: Math.max(editingElement.height, minHeight),
+                          };
+                          setEditingElement(updated);
+                          saveAnnotation(updated);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full h-full p-0 m-0 border-0 outline-none resize-none overflow-hidden bg-transparent select-text"
+                        style={{
+                          fontFamily:
+                            editingElement.fontFamily === 'Times-Roman'
+                              ? 'Times New Roman, Georgia, serif'
+                              : editingElement.fontFamily === 'Courier'
+                              ? 'Courier New, monospace'
+                              : 'Arial, Helvetica, sans-serif',
+                          fontSize: `${editingElement.fontSize * totalScale}px`,
+                          fontWeight: editingElement.fontWeight,
+                          fontStyle: editingElement.fontStyle,
+                          textDecoration: editingElement.underline ? 'underline' : 'none',
+                          color: editingElement.color || '#000000',
+                          lineHeight: 1.15,
+                        }}
+                      />
+                    ) : (
+                      <span
+                        className="whitespace-nowrap overflow-visible select-none"
+                        style={{
+                          fontFamily:
+                            textEl.fontFamily === 'Times-Roman'
+                              ? 'Times New Roman, Georgia, serif'
+                              : textEl.fontFamily === 'Courier'
+                              ? 'Courier New, monospace'
+                              : 'Arial, Helvetica, sans-serif',
+                          fontSize: `${textEl.fontSize * totalScale}px`,
+                          fontWeight: textEl.fontWeight,
+                          fontStyle: textEl.fontStyle,
+                          textDecoration: textEl.underline ? 'underline' : 'none',
+                          color: textEl.color || '#000000',
+                          lineHeight: 1.15,
+                        }}
+                      >
+                        {textEl.text}
+                      </span>
+                    )}
                   </div>
                 );
               }
@@ -880,226 +922,146 @@ export default function MobileStudio({
 
       {/* ======================= ANDROID NATIVE BOTTOM SHEETS ======================= */}
 
-      {/* BOTTOM SHEET 1: ERGONOMIC TEXT MODIFIER */}
-      {activeDrawer === 'edit_text' && editingElement && (
+      {/* FLOATING CONTEXTUAL FORMATTING BAR (Non-blocking, Inline WYSIWYG) */}
+      {editingElement && (
         <div
-          className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs flex flex-col justify-end"
-          style={{ zIndex: 60 }}
+          className="fixed bottom-20 left-3 right-3 z-50 bg-stone-900/95 backdrop-blur-md text-white rounded-2xl px-3 py-2 flex items-center justify-between shadow-2xl border border-stone-700/80 animate-in slide-in-from-bottom duration-150"
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="bg-[#f7f5f0] rounded-t-3xl border-t border-[#ded7cc] p-4 max-h-[90vh] flex flex-col space-y-3.5 shadow-2xl animate-in slide-in-from-bottom duration-200">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-2 border-b border-[#ded7cc]">
-              <div className="flex items-center space-x-2">
-                <span className="p-1.5 bg-stone-200 text-stone-900 rounded-xl">
-                  <Edit3 size={16} />
-                </span>
-                <div>
-                  <h3 className="font-black text-stone-900 text-sm">Modificar Texto</h3>
-                  <p className="text-[10px] text-stone-500">
-                    {detectedFontName ? `Fuente detectada: ${detectedFontName}` : 'Reemplaza el texto en su posición exacta'}
-                  </p>
-                </div>
-              </div>
+          {/* Typography: B, I, U */}
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => {
+                const updated = {
+                  ...editingElement,
+                  fontWeight: editingElement.fontWeight === 'bold' ? 'normal' : 'bold',
+                } as TextElement;
+                setEditingElement(updated);
+                saveAnnotation(updated);
+              }}
+              className={`p-1.5 rounded-lg text-xs font-bold ${
+                editingElement.fontWeight === 'bold'
+                  ? 'bg-amber-500 text-stone-950 font-black'
+                  : 'text-stone-300 hover:bg-stone-800'
+              }`}
+              title="Negrita"
+            >
+              <Bold size={14} />
+            </button>
+            <button
+              onClick={() => {
+                const updated = {
+                  ...editingElement,
+                  fontStyle: editingElement.fontStyle === 'italic' ? 'normal' : 'italic',
+                } as TextElement;
+                setEditingElement(updated);
+                saveAnnotation(updated);
+              }}
+              className={`p-1.5 rounded-lg text-xs font-bold ${
+                editingElement.fontStyle === 'italic'
+                  ? 'bg-amber-500 text-stone-950 font-black'
+                  : 'text-stone-300 hover:bg-stone-800'
+              }`}
+              title="Cursiva"
+            >
+              <Italic size={14} />
+            </button>
+            <button
+              onClick={() => {
+                const updated = {
+                  ...editingElement,
+                  underline: !editingElement.underline,
+                } as TextElement;
+                setEditingElement(updated);
+                saveAnnotation(updated);
+              }}
+              className={`p-1.5 rounded-lg text-xs font-bold ${
+                editingElement.underline
+                  ? 'bg-amber-500 text-stone-950 font-black'
+                  : 'text-stone-300 hover:bg-stone-800'
+              }`}
+              title="Subrayado"
+            >
+              <Underline size={14} />
+            </button>
+          </div>
+
+          <div className="h-4 w-[1px] bg-stone-700" />
+
+          {/* Font Size: - / + */}
+          <div className="flex items-center space-x-1 bg-stone-800 rounded-lg px-1 py-0.5 border border-stone-700">
+            <button
+              onClick={() => {
+                const updated = {
+                  ...editingElement,
+                  fontSize: Math.max(6, editingElement.fontSize - 1),
+                } as TextElement;
+                setEditingElement(updated);
+                saveAnnotation(updated);
+              }}
+              className="px-1.5 py-0.5 text-stone-300 hover:text-white text-xs font-bold"
+            >
+              -
+            </button>
+            <span className="text-[11px] font-bold text-stone-200 min-w-4 text-center">
+              {Math.round(editingElement.fontSize)}
+            </span>
+            <button
+              onClick={() => {
+                const updated = {
+                  ...editingElement,
+                  fontSize: Math.min(72, editingElement.fontSize + 1),
+                } as TextElement;
+                setEditingElement(updated);
+                saveAnnotation(updated);
+              }}
+              className="px-1.5 py-0.5 text-stone-300 hover:text-white text-xs font-bold"
+            >
+              +
+            </button>
+          </div>
+
+          <div className="h-4 w-[1px] bg-stone-700" />
+
+          {/* Quick Color Swatches */}
+          <div className="flex items-center space-x-1">
+            {['#000000', '#dc2626', '#2563eb', '#16a34a', '#d97706'].map((c) => (
               <button
-                onClick={() => setActiveDrawer('none')}
-                className="p-1.5 bg-[#eae4d9] text-stone-700 rounded-xl"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Original Text Reference (if replacing existing text) */}
-            {originalTextReference && (
-              <div className="p-2.5 bg-[#eae4d9]/70 rounded-xl border border-[#ded7cc] text-[11px] text-stone-700">
-                <span className="text-[9px] font-black uppercase text-stone-500 block mb-0.5">
-                  Texto original:
-                </span>
-                <p className="font-bold text-stone-800 italic line-through opacity-75 truncate">
-                  "{originalTextReference}"
-                </p>
-              </div>
-            )}
-
-            {/* New Text Input */}
-            <div>
-              <label className="block text-[10px] font-black uppercase text-stone-600 mb-1">
-                Escribe el Nuevo Texto:
-              </label>
-              <textarea
-                autoFocus
-                value={editingElement.text}
-                onChange={(e) => setEditingElement({ ...editingElement, text: e.target.value })}
-                rows={3}
-                className="w-full p-3 bg-white border border-stone-300 focus:border-stone-800 rounded-2xl text-sm font-bold text-stone-900 outline-none shadow-inner"
-                placeholder="Escribe aquí el texto de reemplazo..."
+                key={c}
+                onClick={() => {
+                  const updated = { ...editingElement, color: c } as TextElement;
+                  setEditingElement(updated);
+                  saveAnnotation(updated);
+                }}
+                className={`w-4 h-4 rounded-full border transition-transform ${
+                  editingElement.color === c
+                    ? 'scale-125 border-white ring-1 ring-amber-400'
+                    : 'border-stone-600'
+                }`}
+                style={{ backgroundColor: c }}
               />
-            </div>
+            ))}
+          </div>
 
-            {/* Typography Pill Selector */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] font-black uppercase text-stone-600">
-                  Tipografía:
-                </label>
-                {detectedFontName && (
-                  <span className="text-[9px] text-stone-500 font-bold">
-                    Detectada: {editingElement.fontFamily}
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'Helvetica', label: 'Helvetica / Arial', style: 'Sans-Serif' },
-                  { id: 'Times-Roman', label: 'Times New Roman', style: 'Serif' },
-                  { id: 'Courier', label: 'Courier', style: 'Mono' },
-                ].map((font) => (
-                  <button
-                    key={font.id}
-                    onClick={() =>
-                      setEditingElement({
-                        ...editingElement,
-                        fontFamily: font.id as StandardFontFamily,
-                      })
-                    }
-                    className={`p-2 rounded-xl text-center border transition-all ${
-                      editingElement.fontFamily === font.id
-                        ? 'bg-stone-900 text-white border-stone-900 shadow-xs font-black'
-                        : 'bg-white text-stone-700 border-[#ded7cc] hover:bg-stone-50'
-                    }`}
-                  >
-                    <span className="block text-xs font-bold truncate">{font.label}</span>
-                    <span className="block text-[9px] opacity-70">{font.style}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+          <div className="h-4 w-[1px] bg-stone-700" />
 
-            {/* Size & Format Row */}
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              {/* Size Stepper */}
-              <div>
-                <label className="block text-[10px] font-black uppercase text-stone-600 mb-1">
-                  Tamaño ({Math.round(editingElement.fontSize)} pt)
-                </label>
-                <div className="flex items-center bg-white border border-[#ded7cc] rounded-xl p-1 justify-between">
-                  <button
-                    onClick={() =>
-                      setEditingElement({
-                        ...editingElement,
-                        fontSize: Math.max(6, editingElement.fontSize - 1),
-                      })
-                    }
-                    className="px-3 py-1.5 bg-[#eae4d9] rounded-lg font-black text-xs"
-                  >
-                    -
-                  </button>
-                  <span className="text-xs font-black text-stone-900">
-                    {Math.round(editingElement.fontSize)} pt
-                  </span>
-                  <button
-                    onClick={() =>
-                      setEditingElement({
-                        ...editingElement,
-                        fontSize: Math.min(72, editingElement.fontSize + 1),
-                      })
-                    }
-                    className="px-3 py-1.5 bg-[#eae4d9] rounded-lg font-black text-xs"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              {/* Bold / Italic & Color */}
-              <div>
-                <label className="block text-[10px] font-black uppercase text-stone-600 mb-1">
-                  Estilo & Color
-                </label>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-1.5">
-                    <button
-                      onClick={() =>
-                        setEditingElement({
-                          ...editingElement,
-                          fontWeight: editingElement.fontWeight === 'bold' ? 'normal' : 'bold',
-                        })
-                      }
-                      className={`p-2 rounded-xl border text-xs font-bold ${
-                        editingElement.fontWeight === 'bold'
-                          ? 'bg-stone-900 text-white border-stone-900'
-                          : 'bg-white text-stone-700 border-[#ded7cc]'
-                      }`}
-                    >
-                      <Bold size={14} />
-                    </button>
-                    <button
-                      onClick={() =>
-                        setEditingElement({
-                          ...editingElement,
-                          fontStyle: editingElement.fontStyle === 'italic' ? 'normal' : 'italic',
-                        })
-                      }
-                      className={`p-2 rounded-xl border text-xs font-bold ${
-                        editingElement.fontStyle === 'italic'
-                          ? 'bg-stone-900 text-white border-stone-900'
-                          : 'bg-white text-stone-700 border-[#ded7cc]'
-                      }`}
-                    >
-                      <Italic size={14} />
-                    </button>
-                    <button
-                      onClick={() =>
-                        setEditingElement({
-                          ...editingElement,
-                          underline: !editingElement.underline,
-                        })
-                      }
-                      className={`p-2 rounded-xl border text-xs font-bold ${
-                        editingElement.underline
-                          ? 'bg-stone-900 text-white border-stone-900'
-                          : 'bg-white text-stone-700 border-[#ded7cc]'
-                      }`}
-                      title="Subrayado"
-                    >
-                      <Underline size={14} />
-                    </button>
-                  </div>
-
-                  {/* Colors */}
-                  <div className="flex items-center space-x-1">
-                    {['#000000', '#dc2626', '#2563eb', '#16a34a'].map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setEditingElement({ ...editingElement, color: c })}
-                        className={`w-5 h-5 rounded-full border-2 transition-transform ${
-                          editingElement.color === c ? 'scale-115 border-stone-900' : 'border-white'
-                        }`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center space-x-2.5 pt-2">
-              <button
-                onClick={() => deleteAnnotation(editingElement.id)}
-                className="p-3 bg-rose-100 text-rose-900 rounded-2xl font-black text-xs flex items-center justify-center gap-1"
-              >
-                <Trash2 size={15} />
-                <span>Borrar</span>
-              </button>
-
-              <button
-                onClick={handleApplyChanges}
-                className="flex-1 p-3.5 bg-stone-900 hover:bg-stone-800 text-white rounded-2xl font-black text-xs shadow-md flex items-center justify-center gap-2"
-              >
-                <Check size={16} className="text-emerald-400" />
-                <span>Reemplazar en PDF</span>
-              </button>
-            </div>
+          {/* Delete & Done */}
+          <div className="flex items-center space-x-1.5">
+            <button
+              onClick={() => deleteAnnotation(editingElement.id)}
+              className="p-1.5 text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 rounded-lg"
+              title="Eliminar"
+            >
+              <Trash2 size={15} />
+            </button>
+            <button
+              onClick={handleApplyChanges}
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black rounded-lg flex items-center gap-1 text-xs"
+              title="Listo"
+            >
+              <Check size={14} />
+              <span>Listo</span>
+            </button>
           </div>
         </div>
       )}

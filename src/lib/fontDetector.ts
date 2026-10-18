@@ -25,6 +25,8 @@ export function matchFont(
   const isBold =
     fontObj.bold === true ||
     fontObj.black === true ||
+    fontObj.fontWeight === 'bold' ||
+    (typeof fontObj.fontWeight === 'number' && fontObj.fontWeight >= 600) ||
     combined.includes('bold') ||
     combined.includes('black') ||
     combined.includes('heavy') ||
@@ -56,17 +58,31 @@ export function matchFont(
     combined.includes('typewriter') ||
     combined.includes('ocr');
 
-  // Detect Serif
+  // Detect Sans-Serif explicitly first so "sans-serif" does not falsely match "serif"
+  const isSans =
+    combined.includes('sans') ||
+    combined.includes('helvetica') ||
+    combined.includes('arial') ||
+    combined.includes('verdana') ||
+    combined.includes('tahoma') ||
+    combined.includes('trebuchet') ||
+    combined.includes('calibri') ||
+    combined.includes('segoe') ||
+    combined.includes('inter') ||
+    combined.includes('roboto');
+
+  // Detect Serif (strictly excluding sans-serif)
   const isSerif =
-    fontObj.serif === true ||
-    combined.includes('times') ||
-    combined.includes('roman') ||
-    combined.includes('georgia') ||
-    combined.includes('garamond') ||
-    combined.includes('cambria') ||
-    combined.includes('baskerville') ||
-    combined.includes('palatino') ||
-    combined.includes('serif');
+    !isSans &&
+    (fontObj.serif === true ||
+      combined.includes('times') ||
+      combined.includes('roman') ||
+      combined.includes('georgia') ||
+      combined.includes('garamond') ||
+      combined.includes('cambria') ||
+      combined.includes('baskerville') ||
+      combined.includes('palatino') ||
+      (combined.includes('serif') && !combined.includes('sans')));
 
   if (isMonospace) {
     return {

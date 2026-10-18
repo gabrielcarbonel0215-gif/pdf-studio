@@ -60,6 +60,7 @@ import {
   FileText,
   Sparkles,
   Search,
+  GripVertical,
 } from 'lucide-react';
 
 interface EditorStudioProps {
@@ -85,7 +86,6 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
 
   // Drawers & Modals
   const [showMobilePagesDrawer, setShowMobilePagesDrawer] = useState<boolean>(false);
-  const [showMobileTextEditor, setShowMobileTextEditor] = useState<boolean>(false);
   const [showPageTextListModal, setShowPageTextListModal] = useState<boolean>(false);
   const [textSearchQuery, setTextSearchQuery] = useState<string>('');
 
@@ -334,7 +334,6 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
     pushHistory(newAnnotations);
     setSelectedElementId(null);
     setIsEditingInlineText(false);
-    setShowMobileTextEditor(false);
     showToast('Elemento eliminado', 'info');
   };
 
@@ -354,13 +353,52 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
   const handleDirectEditText = (replacement: TextElement) => {
     addElementToCurrentPage(replacement);
     setSelectedElementId(replacement.id);
-    setShowMobileTextEditor(true);
+    setIsEditingInlineText(true);
     setShowPageTextListModal(false);
-    showToast('Texto listo para modificar');
+    showToast('Edita directamente el texto en el documento');
+  };
+
+  // Dedicated Drag Handler for Elements & Contextual Drag Handles
+  const startDragging = (e: React.MouseEvent, el: AnnotationElement) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedElementId(el.id);
+    isDraggingElement.current = true;
+    dragStartOffset.current = {
+      x: e.clientX - el.x * scale,
+      y: e.clientY - el.y * scale,
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingElement.current) return;
+      const newX = (moveEvent.clientX - dragStartOffset.current.x) / scale;
+      const newY = (moveEvent.clientY - dragStartOffset.current.y) / scale;
+      updateElement({
+        ...el,
+        x: Math.round(newX),
+        y: Math.round(newY),
+      });
+    };
+
+    const handleMouseUp = () => {
+      isDraggingElement.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   };
 
   // Handle Overlay Click
   const handleOverlayMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (activeTool === 'select') {
+      // Clicking on empty canvas deselects active element and closes inline toolbar
+      setSelectedElementId(null);
+      setIsEditingInlineText(false);
+      return;
+    }
+
     if (activeTool !== 'text' && activeTool !== 'rectangle' && activeTool !== 'circle' && activeTool !== 'line' && activeTool !== 'highlight') {
       return;
     }
@@ -390,8 +428,8 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
       };
       addElementToCurrentPage(newText);
       setSelectedElementId(newText.id);
+      setIsEditingInlineText(true);
       setActiveTool('select');
-      setShowMobileTextEditor(true);
     } else if (activeTool === 'rectangle' || activeTool === 'highlight') {
       const isHighlight = activeTool === 'highlight';
       const newShape = {
@@ -698,42 +736,18 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
                           e.stopPropagation();
                           setSelectedElementId(el.id);
                           if (el.type === 'text') {
-                            setShowMobileTextEditor(true);
+                            setIsEditingInlineText(true);
                           }
                         }}
                         onMouseDown={(e) => {
                           if (activeTool !== 'select') return;
-                          e.stopPropagation();
-                          setSelectedElementId(el.id);
-                          isDraggingElement.current = true;
-                          dragStartOffset.current = {
-                            x: e.clientX - el.x * scale,
-                            y: e.clientY - el.y * scale,
-                          };
-
-                          const handleMouseMove = (moveEvent: MouseEvent) => {
-                            if (!isDraggingElement.current || !overlayRef.current) return;
-                            const newX = (moveEvent.clientX - dragStartOffset.current.x) / scale;
-                            const newY = (moveEvent.clientY - dragStartOffset.current.y) / scale;
-                            updateElement({
-                              ...el,
-                              x: Math.round(newX),
-                              y: Math.round(newY),
-                            });
-                          };
-
-                          const handleMouseUp = () => {
-                            isDraggingElement.current = false;
-                            window.removeEventListener('mousemove', handleMouseMove);
-                            window.removeEventListener('mouseup', handleMouseUp);
-                          };
-
-                          window.addEventListener('mousemove', handleMouseMove);
-                          window.addEventListener('mouseup', handleMouseUp);
+                          if (el.type !== 'text' || !isEditingInlineText || !isSelected) {
+                            startDragging(e, el);
+                          }
                         }}
                         className={`absolute select-none transition-shadow group ${
                           isSelected
-                            ? 'ring-2 ring-amber-600 ring-offset-1 shadow-md z-30'
+                            ? 'ring-1.5 ring-amber-500/90 rounded-xs shadow-xs z-30'
                             : 'hover:ring-1 hover:ring-amber-400/60'
                         }`}
                         style={{
@@ -744,22 +758,159 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
                           opacity: el.opacity ?? 1,
                         }}
                       >
-                        {/* Desktop Contextual Mini-Toolbar */}
+                        {/* Contextual Floating Mini-Toolbar */}
                         {isSelected && (
                           <div
-                            className="hidden lg:flex absolute -top-9 left-0 bg-stone-900 text-white rounded-xl px-2 py-1 items-center gap-1.5 shadow-xl border border-stone-700 z-40 animate-in fade-in zoom-in-95 pointer-events-auto"
+                            className="flex absolute -top-10 left-0 bg-stone-900/95 backdrop-blur-md text-white rounded-xl px-2 py-1 items-center gap-1.5 shadow-2xl border border-stone-700/80 z-40 select-none animate-in fade-in zoom-in-95 pointer-events-auto"
                             onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
                           >
+                            {/* Drag Handle */}
+                            <div
+                              className="cursor-grab active:cursor-grabbing p-1 text-stone-400 hover:text-white"
+                              title="Arrastrar para mover elemento"
+                              onMouseDown={(e) => startDragging(e, el)}
+                            >
+                              <GripVertical size={13} />
+                            </div>
+
                             {el.type === 'text' && (
-                              <button
-                                onClick={() => setShowMobileTextEditor(true)}
-                                title="Editar texto"
-                                className="p-1 hover:bg-stone-800 text-stone-300 hover:text-white rounded-lg flex items-center gap-1 text-[11px] font-semibold"
-                              >
-                                <Edit2 size={12} />
-                                <span>Modificar</span>
-                              </button>
+                              <>
+                                <div className="h-3.5 w-[1px] bg-stone-700" />
+                                {/* Font Family */}
+                                <select
+                                  value={(el as TextElement).fontFamily}
+                                  onChange={(e) =>
+                                    updateElement({
+                                      ...el,
+                                      fontFamily: e.target.value as StandardFontFamily,
+                                    } as TextElement)
+                                  }
+                                  className="bg-stone-800 text-[11px] font-bold text-stone-200 rounded-lg px-1.5 py-0.5 border border-stone-700 outline-none cursor-pointer hover:bg-stone-700"
+                                >
+                                  <option value="Helvetica">Helvetica (Sans)</option>
+                                  <option value="Times-Roman">Times New Roman (Serif)</option>
+                                  <option value="Courier">Courier (Mono)</option>
+                                </select>
+
+                                {/* Font Size */}
+                                <div className="flex items-center bg-stone-800 rounded-lg px-1 border border-stone-700">
+                                  <button
+                                    onClick={() =>
+                                      updateElement({
+                                        ...el,
+                                        fontSize: Math.max(6, (el as TextElement).fontSize - 1),
+                                      } as TextElement)
+                                    }
+                                    className="px-1 text-stone-300 hover:text-white text-xs font-bold"
+                                    title="Reducir tamaño"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="text-[11px] font-bold px-1 text-stone-200 min-w-4 text-center">
+                                    {Math.round((el as TextElement).fontSize)}
+                                  </span>
+                                  <button
+                                    onClick={() =>
+                                      updateElement({
+                                        ...el,
+                                        fontSize: Math.min(72, (el as TextElement).fontSize + 1),
+                                      } as TextElement)
+                                    }
+                                    className="px-1 text-stone-300 hover:text-white text-xs font-bold"
+                                    title="Aumentar tamaño"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+
+                                <div className="h-3.5 w-[1px] bg-stone-700" />
+
+                                {/* Bold */}
+                                <button
+                                  onClick={() =>
+                                    updateElement({
+                                      ...el,
+                                      fontWeight:
+                                        (el as TextElement).fontWeight === 'bold' ? 'normal' : 'bold',
+                                    } as TextElement)
+                                  }
+                                  className={`p-1 rounded-lg transition-colors ${
+                                    (el as TextElement).fontWeight === 'bold'
+                                      ? 'bg-amber-500 text-stone-950 font-black'
+                                      : 'text-stone-300 hover:bg-stone-800 hover:text-white'
+                                  }`}
+                                  title="Negrita"
+                                >
+                                  <Bold size={13} />
+                                </button>
+
+                                {/* Italic */}
+                                <button
+                                  onClick={() =>
+                                    updateElement({
+                                      ...el,
+                                      fontStyle:
+                                        (el as TextElement).fontStyle === 'italic' ? 'normal' : 'italic',
+                                    } as TextElement)
+                                  }
+                                  className={`p-1 rounded-lg transition-colors ${
+                                    (el as TextElement).fontStyle === 'italic'
+                                      ? 'bg-amber-500 text-stone-950 font-black'
+                                      : 'text-stone-300 hover:bg-stone-800 hover:text-white'
+                                  }`}
+                                  title="Cursiva"
+                                >
+                                  <Italic size={13} />
+                                </button>
+
+                                {/* Underline */}
+                                <button
+                                  onClick={() =>
+                                    updateElement({
+                                      ...el,
+                                      underline: !(el as TextElement).underline,
+                                    } as TextElement)
+                                  }
+                                  className={`p-1 rounded-lg transition-colors ${
+                                    (el as TextElement).underline
+                                      ? 'bg-amber-500 text-stone-950 font-black'
+                                      : 'text-stone-300 hover:bg-stone-800 hover:text-white'
+                                  }`}
+                                  title="Subrayado"
+                                >
+                                  <Underline size={13} />
+                                </button>
+
+                                <div className="h-3.5 w-[1px] bg-stone-700" />
+
+                                {/* Color Swatches */}
+                                <div className="flex items-center gap-1">
+                                  {['#000000', '#dc2626', '#2563eb', '#16a34a', '#d97706'].map((c) => (
+                                    <button
+                                      key={c}
+                                      onClick={() =>
+                                        updateElement({
+                                          ...el,
+                                          color: c,
+                                        } as TextElement)
+                                      }
+                                      className={`w-3.5 h-3.5 rounded-full border transition-transform ${
+                                        (el as TextElement).color === c
+                                          ? 'scale-125 border-white ring-1 ring-amber-400'
+                                          : 'border-stone-600 hover:scale-110'
+                                      }`}
+                                      style={{ backgroundColor: c }}
+                                      title={c}
+                                    />
+                                  ))}
+                                </div>
+                              </>
                             )}
+
+                            <div className="h-3.5 w-[1px] bg-stone-700" />
+
+                            {/* Duplicate */}
                             <button
                               onClick={() => duplicateElement(el)}
                               title="Duplicar"
@@ -767,6 +918,8 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
                             >
                               <Copy size={13} />
                             </button>
+
+                            {/* Delete */}
                             <button
                               onClick={() => deleteElement(el.id)}
                               title="Eliminar"
@@ -774,36 +927,88 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
                             >
                               <Trash2 size={13} />
                             </button>
+
+                            {/* Done Button */}
+                            <button
+                              onClick={() => {
+                                setIsEditingInlineText(false);
+                                setSelectedElementId(null);
+                              }}
+                              title="Listo"
+                              className="p-1 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-lg font-bold"
+                            >
+                              <Check size={13} />
+                            </button>
                           </div>
                         )}
 
-                        {/* TEXT ELEMENT */}
+                        {/* TEXT ELEMENT - INLINE WYSIWYG EDITING */}
                         {el.type === 'text' && (
-                          <div
-                            className="w-full h-full p-0.5 overflow-hidden flex items-center"
-                            style={{
-                              backgroundColor:
-                                (el as TextElement).backgroundColor &&
-                                (el as TextElement).backgroundColor !== 'transparent'
-                                  ? (el as TextElement).backgroundColor
-                                  : undefined,
-                              fontFamily:
-                                (el as TextElement).fontFamily === 'Times-Roman'
-                                  ? 'Times New Roman, serif'
-                                  : (el as TextElement).fontFamily === 'Courier'
-                                  ? 'Courier New, monospace'
-                                  : 'Helvetica, Arial, sans-serif',
-                              fontSize: `${(el as TextElement).fontSize * scale}px`,
-                              fontWeight: (el as TextElement).fontWeight,
-                              fontStyle: (el as TextElement).fontStyle,
-                              textDecoration: (el as TextElement).underline ? 'underline' : 'none',
-                              color: (el as TextElement).color,
-                              textAlign: (el as TextElement).alignment,
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            {(el as TextElement).text}
-                          </div>
+                          isSelected && isEditingInlineText ? (
+                            <textarea
+                              autoFocus
+                              value={(el as TextElement).text}
+                              onChange={(e) => {
+                                const newText = e.target.value;
+                                const lineCount = (newText.match(/\n/g) || []).length + 1;
+                                const minHeight = Math.max(30, Math.round(lineCount * (el as TextElement).fontSize * 1.35));
+                                updateElement({
+                                  ...el,
+                                  text: newText,
+                                  height: Math.max(el.height, minHeight),
+                                } as TextElement);
+                              }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                  setIsEditingInlineText(false);
+                                }
+                              }}
+                              className="w-full h-full p-0 m-0 border-0 outline-none resize-none overflow-hidden bg-transparent select-text"
+                              style={{
+                                fontFamily:
+                                  (el as TextElement).fontFamily === 'Times-Roman'
+                                    ? 'Times New Roman, serif'
+                                    : (el as TextElement).fontFamily === 'Courier'
+                                    ? 'Courier New, monospace'
+                                    : 'Helvetica, Arial, sans-serif',
+                                fontSize: `${(el as TextElement).fontSize * scale}px`,
+                                fontWeight: (el as TextElement).fontWeight,
+                                fontStyle: (el as TextElement).fontStyle,
+                                textDecoration: (el as TextElement).underline ? 'underline' : 'none',
+                                color: (el as TextElement).color,
+                                textAlign: (el as TextElement).alignment,
+                                lineHeight: 1.25,
+                              }}
+                            />
+                          ) : (
+                            <div
+                              className="w-full h-full p-0 overflow-hidden flex items-center select-none"
+                              style={{
+                                backgroundColor:
+                                  (el as TextElement).backgroundColor &&
+                                  (el as TextElement).backgroundColor !== 'transparent'
+                                    ? (el as TextElement).backgroundColor
+                                    : undefined,
+                                fontFamily:
+                                  (el as TextElement).fontFamily === 'Times-Roman'
+                                    ? 'Times New Roman, serif'
+                                    : (el as TextElement).fontFamily === 'Courier'
+                                    ? 'Courier New, monospace'
+                                    : 'Helvetica, Arial, sans-serif',
+                                fontSize: `${(el as TextElement).fontSize * scale}px`,
+                                fontWeight: (el as TextElement).fontWeight,
+                                fontStyle: (el as TextElement).fontStyle,
+                                textDecoration: (el as TextElement).underline ? 'underline' : 'none',
+                                color: (el as TextElement).color,
+                                textAlign: (el as TextElement).alignment,
+                                lineHeight: 1.25,
+                              }}
+                            >
+                              {(el as TextElement).text}
+                            </div>
+                          )
                         )}
 
                         {/* RECTANGLE / HIGHLIGHT */}
@@ -1048,197 +1253,7 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
             </div>
           )}
 
-          {/* DEDICATED TEXT EDIT MODAL / BOTTOM SHEET (Universal for Mobile & Desktop) */}
-          {showMobileTextEditor && selectedElement && selectedElement.type === 'text' && (
-            <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
-              <div className="bg-[#f7f5f0] rounded-t-3xl sm:rounded-3xl border border-[#ded7cc] p-5 shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 max-h-[90vh] w-full sm:max-w-lg flex flex-col space-y-4">
-                {/* Header */}
-                <div className="flex items-center justify-between pb-2 border-b border-[#ded7cc]">
-                  <div className="flex items-center space-x-2">
-                    <span className="p-1.5 bg-amber-100 text-amber-900 rounded-lg">
-                      <Type size={16} />
-                    </span>
-                    <h3 className="font-black text-stone-900 text-sm">Modificar Texto en PDF</h3>
-                  </div>
-                  <button
-                    onClick={() => setShowMobileTextEditor(false)}
-                    className="p-1.5 bg-[#eae4d9] text-stone-700 rounded-xl"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
 
-                {/* Text Content Input */}
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-stone-500 mb-1">
-                    Nuevo Texto (Reemplazo)
-                  </label>
-                  <textarea
-                    autoFocus
-                    value={(selectedElement as TextElement).text}
-                    onChange={(e) =>
-                      updateElement({ ...selectedElement, text: e.target.value } as TextElement)
-                    }
-                    rows={3}
-                    className="w-full p-3 bg-white border border-[#ded7cc] rounded-2xl text-sm font-semibold text-stone-900 outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
-                    placeholder="Escribe aquí el nuevo texto..."
-                  />
-                </div>
-
-                {/* Font Controls Row */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Font Family */}
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-stone-500 mb-1">
-                      Tipografía
-                    </label>
-                    <select
-                      value={(selectedElement as TextElement).fontFamily}
-                      onChange={(e) =>
-                        updateElement({
-                          ...selectedElement,
-                          fontFamily: e.target.value as StandardFontFamily,
-                        } as TextElement)
-                      }
-                      className="w-full p-2.5 bg-white border border-[#ded7cc] rounded-xl text-xs font-bold text-stone-800 outline-none"
-                    >
-                      <option value="Helvetica">Helvetica (Sans-Serif)</option>
-                      <option value="Times-Roman">Times New Roman (Serif)</option>
-                      <option value="Courier">Courier (Monoespaciada)</option>
-                    </select>
-                  </div>
-
-                  {/* Font Size Stepper */}
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-stone-500 mb-1">
-                      Tamaño ({Math.round((selectedElement as TextElement).fontSize)} pt)
-                    </label>
-                    <div className="flex items-center bg-white border border-[#ded7cc] rounded-xl p-1 justify-between">
-                      <button
-                        onClick={() =>
-                          updateElement({
-                            ...selectedElement,
-                            fontSize: Math.max(6, (selectedElement as TextElement).fontSize - 1),
-                          } as TextElement)
-                        }
-                        className="px-2.5 py-1 bg-[#eae4d9] hover:bg-[#dfd7c8] rounded-lg font-black text-xs"
-                      >
-                        -
-                      </button>
-                      <span className="text-xs font-black text-stone-900">
-                        {Math.round((selectedElement as TextElement).fontSize)}
-                      </span>
-                      <button
-                        onClick={() =>
-                          updateElement({
-                            ...selectedElement,
-                            fontSize: Math.min(72, (selectedElement as TextElement).fontSize + 1),
-                          } as TextElement)
-                        }
-                        className="px-2.5 py-1 bg-[#eae4d9] hover:bg-[#dfd7c8] rounded-lg font-black text-xs"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Font Styles & Color */}
-                <div className="flex items-center justify-between pt-1">
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() =>
-                        updateElement({
-                          ...selectedElement,
-                          fontWeight:
-                            (selectedElement as TextElement).fontWeight === 'bold' ? 'normal' : 'bold',
-                        } as TextElement)
-                      }
-                      className={`p-2 rounded-xl border text-xs font-bold ${
-                        (selectedElement as TextElement).fontWeight === 'bold'
-                          ? 'bg-stone-900 text-white border-stone-900'
-                          : 'bg-white text-stone-700 border-[#ded7cc]'
-                      }`}
-                    >
-                      <Bold size={15} />
-                    </button>
-                    <button
-                      onClick={() =>
-                        updateElement({
-                          ...selectedElement,
-                          fontStyle:
-                            (selectedElement as TextElement).fontStyle === 'italic' ? 'normal' : 'italic',
-                        } as TextElement)
-                      }
-                      className={`p-2 rounded-xl border text-xs font-bold ${
-                        (selectedElement as TextElement).fontStyle === 'italic'
-                          ? 'bg-stone-900 text-white border-stone-900'
-                          : 'bg-white text-stone-700 border-[#ded7cc]'
-                      }`}
-                    >
-                      <Italic size={15} />
-                    </button>
-                    <button
-                      onClick={() =>
-                        updateElement({
-                          ...selectedElement,
-                          underline: !(selectedElement as TextElement).underline,
-                        } as TextElement)
-                      }
-                      className={`p-2 rounded-xl border text-xs font-bold ${
-                        (selectedElement as TextElement).underline
-                          ? 'bg-stone-900 text-white border-stone-900'
-                          : 'bg-white text-stone-700 border-[#ded7cc]'
-                      }`}
-                      title="Subrayado"
-                    >
-                      <Underline size={15} />
-                    </button>
-                  </div>
-
-                  {/* Color Picker */}
-                  <div className="flex items-center space-x-1.5">
-                    {['#000000', '#dc2626', '#2563eb', '#16a34a', '#d97706'].map((c) => (
-                      <button
-                        key={c}
-                        onClick={() =>
-                          updateElement({
-                            ...selectedElement,
-                            color: c,
-                          } as TextElement)
-                        }
-                        className={`w-6 h-6 rounded-full border-2 transition-transform ${
-                          (selectedElement as TextElement).color === c
-                            ? 'scale-115 border-stone-900 shadow-xs'
-                            : 'border-white'
-                        }`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex items-center space-x-3 pt-2">
-                  <button
-                    onClick={() => deleteElement(selectedElement.id)}
-                    className="p-3 bg-rose-100 text-rose-800 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5"
-                  >
-                    <Trash2 size={16} />
-                    <span>Eliminar</span>
-                  </button>
-
-                  <button
-                    onClick={() => setShowMobileTextEditor(false)}
-                    className="flex-1 p-3 bg-stone-900 text-white rounded-2xl font-black text-xs shadow-md flex items-center justify-center gap-2"
-                  >
-                    <Check size={16} />
-                    <span>Listo / Aplicar al PDF</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Dialogs */}
           <SignatureDialog
