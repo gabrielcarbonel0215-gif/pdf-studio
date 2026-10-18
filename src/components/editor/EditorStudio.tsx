@@ -756,6 +756,10 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
                           width: `${screenWidth}px`,
                           height: `${screenHeight}px`,
                           opacity: el.opacity ?? 1,
+                          backgroundColor:
+                            el.type === 'text' && (el as TextElement).backgroundColor && (el as TextElement).backgroundColor !== 'transparent'
+                              ? (el as TextElement).backgroundColor
+                              : undefined,
                         }}
                       >
                         {/* Contextual Floating Mini-Toolbar */}
@@ -965,8 +969,12 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
                                   setIsEditingInlineText(false);
                                 }
                               }}
-                              className="w-full h-full p-0 m-0 border-0 outline-none resize-none overflow-hidden bg-transparent select-text"
+                              className="w-full h-full p-0 m-0 border-0 outline-none resize-none overflow-hidden select-text"
                               style={{
+                                backgroundColor:
+                                  (el as TextElement).backgroundColor && (el as TextElement).backgroundColor !== 'transparent'
+                                    ? (el as TextElement).backgroundColor
+                                    : 'transparent',
                                 fontFamily:
                                   (el as TextElement).fontFamily === 'Times-Roman'
                                     ? 'Times New Roman, serif'
