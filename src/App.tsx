@@ -23,19 +23,37 @@ import {
 export default function App() {
   const [activeTab, setActiveTab] = useState<MainTabType>('home');
 
-  // Intelligent Tab Navigation with Browser History Integration
+  // Intelligent Tab Navigation with Browser History Integration (Preserving Base Path)
   const navigateToTab = (tab: MainTabType, pushHistory = true) => {
     setActiveTab(tab);
     if (pushHistory && typeof window !== 'undefined') {
-      window.history.pushState({ tab }, '', tab === 'home' ? '/' : `/#${tab}`);
+      const hash = tab === 'home' ? '' : `#${tab}`;
+      const targetUrl = window.location.pathname + (window.location.search || '') + hash;
+      window.history.pushState({ tab }, '', targetUrl);
     }
   };
 
-  // Android / Browser Back and Forward Button Interceptor
+  // Android / Browser Back and Forward Button Interceptor & Initial Hash Support
   useEffect(() => {
+    const validTabs: MainTabType[] = ['home', 'editor', 'merge', 'split', 'organize', 'ocr', 'convert', 'security'];
+
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const hashTab = window.location.hash.replace('#', '') as MainTabType;
+      if (validTabs.includes(hashTab)) {
+        setActiveTab(hashTab);
+      }
+    }
+
     const handlePopState = (event: PopStateEvent) => {
       if (event.state && event.state.tab) {
         setActiveTab(event.state.tab);
+      } else if (typeof window !== 'undefined' && window.location.hash) {
+        const hashTab = window.location.hash.replace('#', '') as MainTabType;
+        if (validTabs.includes(hashTab)) {
+          setActiveTab(hashTab);
+        } else {
+          setActiveTab('home');
+        }
       } else {
         // Return to home gallery when back is pressed
         setActiveTab('home');
@@ -43,7 +61,8 @@ export default function App() {
     };
 
     if (typeof window !== 'undefined') {
-      window.history.replaceState({ tab: activeTab }, '', window.location.pathname);
+      const currentHash = window.location.hash || (activeTab === 'home' ? '' : `#${activeTab}`);
+      window.history.replaceState({ tab: activeTab }, '', window.location.pathname + (window.location.search || '') + currentHash);
       window.addEventListener('popstate', handlePopState);
     }
 

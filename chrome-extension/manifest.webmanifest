@@ -2,20 +2,20 @@
   "name": "PDF Studio Pro",
   "short_name": "PDF Studio",
   "description": "Suite de edición de PDFs con detección tipográfica, OCR y herramientas 100% en el navegador.",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#ede8df",
   "theme_color": "#ede8df",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "./icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

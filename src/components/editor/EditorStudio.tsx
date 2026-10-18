@@ -58,6 +58,7 @@ import {
   AlignRight,
   Palette,
   FileText,
+  Sparkles,
   Search,
 } from 'lucide-react';
 
