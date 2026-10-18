@@ -214,9 +214,9 @@ export default function MobileStudio({
 
   // Open Editor for a detected text item (preserving exact font characteristics)
   const openTextEditorForItem = (item: DetectedFontInfo) => {
-    const topY = Math.max(0, pageDimensions.originalHeight - item.y - item.fontSize * 1.08);
-    const charWidth = item.fontSize * 0.60;
-    const estimatedWidth = Math.max(Math.round(item.width + 10), Math.round(item.text.length * charWidth + 10));
+    const topY = Math.max(0, pageDimensions.originalHeight - item.y - item.fontSize * 0.88);
+    const charWidth = item.fontSize * (item.fontWeight === 'bold' ? 0.65 : 0.58);
+    const estimatedWidth = Math.max(Math.round(item.width * 1.15 + 16), Math.round(item.text.length * charWidth + 16), 80);
 
     const newElement: TextElement = {
       id: Math.random().toString(36).substring(7),
@@ -225,7 +225,7 @@ export default function MobileStudio({
       x: Math.round(item.x - 2),
       y: Math.round(topY),
       width: estimatedWidth,
-      height: Math.max(Math.round(item.fontSize * 1.35), 20),
+      height: Math.max(Math.round(item.fontSize * 1.18), 16),
       text: item.text,
       fontFamily: item.matchedFamily,
       fontSize: Math.max(8, Math.round(item.fontSize)),
@@ -745,20 +745,26 @@ export default function MobileStudio({
                         value={editingElement.text}
                         onChange={(e) => {
                           const newText = e.target.value;
-                          const lineCount = (newText.match(/\n/g) || []).length + 1;
-                          const minHeight = Math.max(20, Math.round(lineCount * editingElement.fontSize * 1.35));
+                          const lines = newText.split('\n');
+                          const lineCount = lines.length;
+                          const longestLine = Math.max(...lines.map((l) => l.length), 1);
+                          const charWidth = editingElement.fontSize * (editingElement.fontWeight === 'bold' ? 0.65 : 0.58);
+                          const neededWidth = Math.ceil(longestLine * charWidth + 24);
+                          const neededHeight = Math.ceil((lineCount - 1) * editingElement.fontSize * 1.25 + editingElement.fontSize * 1.18);
                           const updated = {
                             ...editingElement,
                             text: newText,
-                            height: Math.max(editingElement.height, minHeight),
+                            width: Math.max(editingElement.width, neededWidth),
+                            height: Math.max(editingElement.height, neededHeight),
                           };
                           setEditingElement(updated);
                           saveAnnotation(updated);
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-full h-full p-0 m-0 border-0 outline-none resize-none overflow-hidden bg-transparent select-text"
+                        className="w-full h-full p-0 m-0 border-0 outline-none resize-none select-text"
                         style={{
+                          backgroundColor: editingElement.backgroundColor || '#ffffff',
                           fontFamily:
                             editingElement.fontFamily === 'Times-Roman'
                               ? 'Times New Roman, Georgia, serif'
@@ -770,7 +776,9 @@ export default function MobileStudio({
                           fontStyle: editingElement.fontStyle,
                           textDecoration: editingElement.underline ? 'underline' : 'none',
                           color: editingElement.color || '#000000',
-                          lineHeight: 1.15,
+                          lineHeight: 1.18,
+                          whiteSpace: editingElement.text.includes('\n') ? 'pre-wrap' : 'pre',
+                          overflow: 'visible',
                         }}
                       />
                     ) : (

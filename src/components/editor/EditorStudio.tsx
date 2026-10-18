@@ -954,12 +954,18 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
                               value={(el as TextElement).text}
                               onChange={(e) => {
                                 const newText = e.target.value;
-                                const lineCount = (newText.match(/\n/g) || []).length + 1;
-                                const minHeight = Math.max(30, Math.round(lineCount * (el as TextElement).fontSize * 1.35));
+                                const lines = newText.split('\n');
+                                const lineCount = lines.length;
+                                const longestLine = Math.max(...lines.map((l) => l.length), 1);
+                                const estimatedCharWidth =
+                                  (el as TextElement).fontSize * ((el as TextElement).fontWeight === 'bold' ? 0.65 : 0.58);
+                                const neededWidth = Math.ceil(longestLine * estimatedCharWidth + 24);
+                                const neededHeight = Math.ceil((lineCount - 1) * (el as TextElement).fontSize * 1.25 + (el as TextElement).fontSize * 1.18);
                                 updateElement({
                                   ...el,
                                   text: newText,
-                                  height: Math.max(el.height, minHeight),
+                                  width: Math.max(el.width, neededWidth),
+                                  height: Math.max(el.height, neededHeight),
                                 } as TextElement);
                               }}
                               onMouseDown={(e) => e.stopPropagation()}
@@ -969,7 +975,7 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
                                   setIsEditingInlineText(false);
                                 }
                               }}
-                              className="w-full h-full p-0 m-0 border-0 outline-none resize-none overflow-hidden select-text"
+                              className="w-full h-full p-0 m-0 border-0 outline-none resize-none select-text"
                               style={{
                                 backgroundColor:
                                   (el as TextElement).backgroundColor && (el as TextElement).backgroundColor !== 'transparent'
@@ -987,12 +993,14 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
                                 textDecoration: (el as TextElement).underline ? 'underline' : 'none',
                                 color: (el as TextElement).color,
                                 textAlign: (el as TextElement).alignment,
-                                lineHeight: 1.25,
+                                lineHeight: 1.18,
+                                whiteSpace: (el as TextElement).text.includes('\n') ? 'pre-wrap' : 'pre',
+                                overflow: 'visible',
                               }}
                             />
                           ) : (
                             <div
-                              className="w-full h-full p-0 overflow-hidden flex items-center select-none"
+                              className="w-full h-full p-0 flex items-center select-none"
                               style={{
                                 backgroundColor:
                                   (el as TextElement).backgroundColor &&
@@ -1011,7 +1019,9 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
                                 textDecoration: (el as TextElement).underline ? 'underline' : 'none',
                                 color: (el as TextElement).color,
                                 textAlign: (el as TextElement).alignment,
-                                lineHeight: 1.25,
+                                lineHeight: 1.18,
+                                whiteSpace: (el as TextElement).text.includes('\n') ? 'pre-wrap' : 'nowrap',
+                                overflow: 'visible',
                               }}
                             >
                               {(el as TextElement).text}

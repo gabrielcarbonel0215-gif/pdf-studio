@@ -23,19 +23,24 @@ export default function FontMatcherOverlay({
   if (!active || textItems.length === 0) return null;
 
   const handleTextClick = (item: DetectedFontInfo) => {
-    // In PDF coordinates, item.y is distance from bottom.
-    // Convert to top-left coordinate system:
-    const topY = Math.max(0, originalHeight - item.y - item.height);
+    // Top of text in top-left coordinates:
+    // baseline is item.y. Cap height is ~0.85 * fontSize.
+    const topY = Math.max(0, originalHeight - item.y - item.fontSize * 0.88);
+
+    const estimatedCharWidth = item.fontSize * (item.fontWeight === 'bold' ? 0.65 : 0.58);
+    const textCalculatedWidth = Math.ceil(item.text.length * estimatedCharWidth);
+    const elementWidth = Math.max(Math.round(item.width * 1.15 + 16), textCalculatedWidth + 16, 60);
+    const elementHeight = Math.max(Math.round(item.fontSize * 1.18), 15);
 
     // Build immediate replacement element with exact matched font and size
     const newElement: TextElement = {
       id: Math.random().toString(36).substring(7),
       type: 'text',
       pageIndex,
-      x: Math.round(item.x),
+      x: Math.round(item.x - 2),
       y: Math.round(topY),
-      width: Math.max(Math.round(item.width + 8), 60),
-      height: Math.max(Math.round(item.height + 4), Math.round(item.fontSize * 1.3), 20),
+      width: elementWidth,
+      height: elementHeight,
       text: item.text,
       fontFamily: item.matchedFamily,
       fontSize: Math.max(8, Math.round(item.fontSize)),
@@ -54,10 +59,11 @@ export default function FontMatcherOverlay({
   return (
     <div className="absolute inset-0 pointer-events-auto z-15">
       {textItems.map((item, idx) => {
-        const topY = (originalHeight - item.y - item.height) * scale;
-        const leftX = item.x * scale;
-        const width = Math.max(item.width * scale, 18);
-        const height = Math.max(item.height * scale, 16);
+        const topY = (originalHeight - item.y - item.fontSize * 0.88) * scale;
+        const leftX = (item.x - 2) * scale;
+        const estimatedCharWidth = item.fontSize * (item.fontWeight === 'bold' ? 0.65 : 0.58);
+        const width = Math.max(item.width * scale * 1.15 + 16, item.text.length * estimatedCharWidth * scale + 16, 20);
+        const height = Math.max(item.fontSize * 1.18 * scale, 15);
         const isHovered = hoveredIdx === idx;
 
         return (

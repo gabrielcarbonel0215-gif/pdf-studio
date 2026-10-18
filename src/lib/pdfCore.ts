@@ -320,8 +320,8 @@ export async function applyStudioEditsToPdf(
             startX = pdfX + (textEl.width - lineWidth);
           }
 
-          // PDF text drawing baseline Y
-          const textY = pageHeight - el.y - (lineIdx + 1) * lineHeight + textEl.fontSize * 0.25;
+          // PDF text drawing baseline Y (aligns accurately with document baseline)
+          const textY = pageHeight - el.y - (lineIdx * lineHeight) - textEl.fontSize * 0.88;
 
           page.drawText(line, {
             x: startX,
