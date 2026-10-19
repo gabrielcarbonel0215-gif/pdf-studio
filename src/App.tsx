@@ -21,55 +21,28 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<MainTabType>('home');
+  const validTabs: MainTabType[] = ['home', 'editor', 'merge', 'split', 'organize', 'ocr', 'convert', 'security'];
+  const readTabFromUrl = (): MainTabType => {
+    const tab = window.location.hash.slice(1) as MainTabType;
+    return validTabs.includes(tab) ? tab : 'home';
+  };
+  const [activeTab, setActiveTab] = useState<MainTabType>(readTabFromUrl);
 
-  // Intelligent Tab Navigation with Browser History Integration (Preserving Base Path)
-  const navigateToTab = (tab: MainTabType, pushHistory = true) => {
+  const navigateToTab = (tab: MainTabType) => {
+    if (tab === readTabFromUrl()) return;
+    const hash = tab === 'home' ? '' : `#${tab}`;
+    window.history.pushState({ tab }, '', window.location.pathname + window.location.search + hash);
     setActiveTab(tab);
-    if (pushHistory && typeof window !== 'undefined') {
-      const hash = tab === 'home' ? '' : `#${tab}`;
-      const targetUrl = window.location.pathname + (window.location.search || '') + hash;
-      window.history.pushState({ tab }, '', targetUrl);
-    }
   };
 
-  // Android / Browser Back and Forward Button Interceptor & Initial Hash Support
   useEffect(() => {
-    const validTabs: MainTabType[] = ['home', 'editor', 'merge', 'split', 'organize', 'ocr', 'convert', 'security'];
-
-    if (typeof window !== 'undefined' && window.location.hash) {
-      const hashTab = window.location.hash.replace('#', '') as MainTabType;
-      if (validTabs.includes(hashTab)) {
-        setActiveTab(hashTab);
-      }
-    }
-
-    const handlePopState = (event: PopStateEvent) => {
-      if (event.state && event.state.tab) {
-        setActiveTab(event.state.tab);
-      } else if (typeof window !== 'undefined' && window.location.hash) {
-        const hashTab = window.location.hash.replace('#', '') as MainTabType;
-        if (validTabs.includes(hashTab)) {
-          setActiveTab(hashTab);
-        } else {
-          setActiveTab('home');
-        }
-      } else {
-        // Return to home gallery when back is pressed
-        setActiveTab('home');
-      }
-    };
-
-    if (typeof window !== 'undefined') {
-      const currentHash = window.location.hash || (activeTab === 'home' ? '' : `#${activeTab}`);
-      window.history.replaceState({ tab: activeTab }, '', window.location.pathname + (window.location.search || '') + currentHash);
-      window.addEventListener('popstate', handlePopState);
-    }
-
+    // The URL is authoritative, including direct links and manual hash changes.
+    const syncTab = () => setActiveTab(readTabFromUrl());
+    window.addEventListener('popstate', syncTab);
+    window.addEventListener('hashchange', syncTab);
     return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('popstate', handlePopState);
-      }
+      window.removeEventListener('popstate', syncTab);
+      window.removeEventListener('hashchange', syncTab);
     };
   }, []);
 
