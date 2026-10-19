@@ -1,5 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, FileText, Camera } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { UploadCloud } from 'lucide-react';
+import { useToast } from './Toast';
+import { selectAcceptedFiles } from '../../lib/fileSelection';
 
 interface StudioDropzoneProps {
   onFilesSelected: (files: File[]) => void;
@@ -19,7 +21,7 @@ export default function StudioDropzone({
   onFilesSelected,
   accept = 'application/pdf',
   multiple = false,
-  title = 'Abre o arrastra tu archivo aquí',
+  title = 'Abre o arrastra tu archivo aquÃ­',
   subtitle = 'Soporte 100% en el navegador, privado y seguro.',
   badge,
   buttonText = 'Seleccionar Archivo',
@@ -28,6 +30,14 @@ export default function StudioDropzone({
   className = '',
   supportsClipboardPaste = true,
 }: StudioDropzoneProps) {
+  const { showToast } = useToast();
+  const selectFiles = useCallback((files: File[]) => {
+    const accepted = selectAcceptedFiles(files, accept, multiple);
+    if (selectAcceptedFiles(files, accept, true).length !== files.length) {
+      showToast(`Selecciona archivos compatibles: ${accept}`, 'error');
+    }
+    if (accepted.length) onFilesSelected(accepted);
+  }, [accept, multiple, onFilesSelected, showToast]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,14 +49,14 @@ export default function StudioDropzone({
       if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
         const files = Array.from(e.clipboardData.files);
         if (files.length > 0) {
-          onFilesSelected(multiple ? files : [files[0]]);
+          selectFiles(files);
         }
       }
     };
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [supportsClipboardPaste, multiple, onFilesSelected]);
+  }, [supportsClipboardPaste, selectFiles]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -63,14 +73,14 @@ export default function StudioDropzone({
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files);
-      onFilesSelected(multiple ? files : [files[0]]);
+      selectFiles(files);
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
-      onFilesSelected(multiple ? files : [files[0]]);
+      selectFiles(files);
       e.target.value = ''; // Reset input to allow selecting the same file again
     }
   };
@@ -150,7 +160,7 @@ export default function StudioDropzone({
 
         {supportsClipboardPaste && (
           <p className="mt-4 text-[10px] font-bold text-stone-600">
-            Tip: También puedes pegar capturas o archivos directamente con <kbd className="bg-stone-200 px-1.5 py-0.5 rounded text-stone-800">Ctrl + V</kbd>
+            Tip: TambiÃ©n puedes pegar archivos compatibles con <kbd className="bg-stone-200 px-1.5 py-0.5 rounded text-stone-800">Ctrl + V</kbd>
           </p>
         )}
       </div>

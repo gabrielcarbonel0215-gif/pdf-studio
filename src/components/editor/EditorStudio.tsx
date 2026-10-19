@@ -28,6 +28,7 @@ import WatermarkDialog from './WatermarkDialog';
 import PageNumberDialog from './PageNumberDialog';
 import MobileStudio from '../mobile/MobileStudio';
 import StudioDropzone from '../common/StudioDropzone';
+import type { ToastType } from '../common/Toast';
 import {
   UploadCloud,
   ChevronLeft,
@@ -46,6 +47,7 @@ import {
   Redo2,
   Download,
   Info,
+  AlertCircle,
   Check,
   Edit2,
   Layers,
@@ -113,9 +115,9 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
   }, []);
 
   // Toast Notification Message
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: ToastType } | null>(null);
 
-  const showToast = (text: string, type: 'success' | 'info' = 'success') => {
+  const showToast = (text: string, type: ToastType = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 2500);
   };
@@ -588,6 +590,8 @@ export default function EditorStudio({ initialFile = null, onClearFile }: Editor
           <div className="bg-stone-900 text-white text-xs font-bold px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2 border border-stone-700">
             {toastMessage.type === 'success' ? (
               <Check size={14} className="text-emerald-400" />
+            ) : toastMessage.type === 'error' ? (
+              <AlertCircle size={14} className="text-rose-400" />
             ) : (
               <Info size={14} className="text-amber-400" />
             )}
